@@ -1,5 +1,6 @@
 'use client';
 
+import StoreSettings from './StoreSettings';
 import { useEffect, useState } from 'react';
 // 1. IMPORT FIXED: Looking UP one level to the app folder
 import { supabase } from '../supabase';
@@ -198,8 +199,11 @@ export default function VendorDashboard() {
         </div>
       </header>
 
+      {/* NEW: THE STORE SETTINGS MODULE */}
+      <StoreSettings userId={session.user.id} />
+
       {/* COMPONENT A: INTERACTIVE INSERTION ENGINE */}
-      <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 max-w-3xl">
+      <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 max-w-3xl mt-8">
         <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight">Add New Stock Insertion</h2>
         
         <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end">

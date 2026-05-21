@@ -1,231 +1,186 @@
-'use client';
+"use client";
 
 import { useState } from 'react';
-import { supabase } from './supabase';
+import { supabase } from './supabase'; // Adjust path if your client is elsewhere
 
-interface ShopItem {
+// TypeScript definitions for our new grouped data
+interface VinylRecord {
   id: number;
   title: string;
   artist: string;
   price_cents: number;
   weight_grams: number;
-  distance_miles: number;
+  condition: string;
 }
 
-export default function ShopPage() {
-  const [inventory, setInventory] = useState<ShopItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState('Browse active vinyl records in your area.');
-  const [searched, setSearched] = useState(false);
+interface Store {
+  store_id: string;
+  store_name: string;
+  store_bio: string;
+  distance_miles: number;
+  active_records: VinylRecord[];
+}
 
-  // Checkout State
-  const [reservingItem, setReservingItem] = useState<ShopItem | null>(null);
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerEmail, setBuyerEmail] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [successReceipt, setSuccessReceipt] = useState<ShopItem | null>(null);
+export default function PublicRadar() {
+  const [stores, setStores] = useState<Store[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
 
-  // 1. THE GEOLOCATION TRIGGER ROUTINE
-  async function locateVinyl() {
-    setLoading(true);
-    setSearched(true);
-    setStatusMsg('Pinging device GPS...');
+  // 1. The Radar Ping
+  const handleScanRadar = () => {
+    setScanning(true);
+    setErrorMsg('');
+    setStores([]);
 
     if (!navigator.geolocation) {
-      setStatusMsg('Geolocation is not supported by this browser.');
-      setLoading(false);
+      setErrorMsg('Geolocation is not supported by your browser.');
+      setScanning(false);
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        setStatusMsg('Coordinates acquired. Calculating PostGIS radius...');
-
-        try {
-          const { data, error } = await supabase.rpc('get_local_inventory', {
-            buyer_lat: latitude,
-            buyer_lon: longitude,
-          });
-
-          if (error) throw error;
-          
-          setInventory(data || []);
-          setStatusMsg(data && data.length > 0 ? 'Local vault unlocked.' : 'No active inventory nearby.');
-        } catch (err: any) {
-          setStatusMsg(`Failed to query map matrix: ${err.message}`);
-        } finally {
-          setLoading(false);
-        }
+        fetchNearbyStores(latitude, longitude);
       },
       (error) => {
-        setStatusMsg('Location access denied. Please allow GPS permissions to find local records.');
-        setLoading(false);
-      },
-      { enableHighAccuracy: true }
+        setErrorMsg('Please allow location access to find nearby vinyl.');
+        setScanning(false);
+      }
     );
-  }
+  };
 
-  // 2. FRICTIONLESS CHECKOUT ROUTINE
-  async function handleReserve(e: React.FormEvent) {
-    e.preventDefault();
-    if (!reservingItem || !buyerName || !buyerEmail) return;
-
+  // 2. Fetching from our new PostGIS brain
+  const fetchNearbyStores = async (lat: number, lon: number) => {
     try {
-      setIsProcessing(true);
-      
-      // Update the database to lock the record so nobody else can buy it
-      const { error } = await supabase
-        .from('inventory')
-        .update({ status: 'reserved' })
-        .eq('id', reservingItem.id);
+      const { data, error } = await supabase.rpc('get_nearby_stores', {
+        user_lat: lat,
+        user_lon: lon,
+        radius_miles: 25 // Scans a 25-mile radius
+      });
 
       if (error) throw error;
-
-      // Show the success receipt and close the checkout slider
-      setSuccessReceipt(reservingItem);
-      setReservingItem(null);
-      setBuyerName('');
-      setBuyerEmail('');
-      
-      // Refresh the radar silently in the background to remove the bought item
-      locateVinyl();
-      
+      setStores(data || []);
     } catch (err: any) {
-      alert(`Checkout failed: ${err.message}`);
+      console.error('Radar failure:', err.message);
+      setErrorMsg('Radar network error. Please try again.');
     } finally {
-      setIsProcessing(false);
+      setScanning(false);
     }
-  }
+  };
 
   return (
-    <main className="min-h-screen bg-gray-50 font-sans pb-12">
-      {/* PUBLIC HEADER */}
-      <header className="bg-white border-b border-gray-200 px-8 py-5 mb-8">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">TimbreBox<span className="text-emerald-600">.Market</span></h1>
-          <a href="/vendor" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition border border-transparent hover:border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg">
-            Vendor Login
-          </a>
-        </div>
+    <main className="min-h-screen bg-gray-50 font-sans p-6 md:p-12">
+      {/* HEADER */}
+      <header className="max-w-5xl mx-auto flex justify-between items-center mb-12">
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">TimbreBox<span className="text-emerald-600">.Radar</span></h1>
+        <a href="/vendor" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition">Vendor Login →</a>
       </header>
 
-      <div className="p-8 max-w-5xl mx-auto pt-0">
-        {/* INTERACTIVE RADAR HERO SECTION */}
-        <section className="bg-gray-900 rounded-3xl p-10 text-center mb-10 shadow-lg relative overflow-hidden">
-          <div className="relative z-10">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-3 tracking-tight">Find Vinyl Records Near You</h2>
-            <p className="text-gray-400 mb-8 max-w-lg mx-auto text-sm md:text-base leading-relaxed">{statusMsg}</p>
-            
-            <button
-              onClick={locateVinyl}
-              disabled={loading}
-              className="bg-emerald-500 hover:bg-emerald-400 text-gray-900 px-8 py-3.5 rounded-xl text-sm font-bold transition shadow-sm disabled:opacity-50 inline-flex items-center gap-2"
-            >
-              {loading ? 'Scanning Radar...' : 'Scan Local Radar'}
-              {!loading && (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z"></path>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                </svg>
-              )}
-            </button>
-          </div>
-        </section>
-
-        {/* DISTANCE-SORTED INVENTORY GRID */}
-        {searched && !loading && inventory.length > 0 && (
-          <section className="animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900 tracking-tight">Local Inventory</h3>
-              <span className="text-sm font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-lg">
-                {inventory.length} Records Found
-              </span>
-            </div>
-
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {inventory.map((item) => (
-                <div key={item.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between transition hover:shadow-md">
-                  <div>
-                    <h4 className="font-bold text-lg text-gray-900 tracking-tight leading-snug mb-1">{item.title}</h4>
-                    <p className="text-gray-500 font-medium text-sm mb-4">{item.artist}</p>
-                    <div className="bg-gray-50 rounded-lg p-2.5 flex items-center justify-between border border-gray-200 mb-6">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Distance</span>
-                      <span className="text-sm font-black text-gray-900">{item.distance_miles} mi</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between mt-auto">
-                    <span className="font-bold text-emerald-600 text-xl">${(item.price_cents / 100).toFixed(2)}</span>
-                    <button 
-                      onClick={() => setReservingItem(item)}
-                      className="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold py-2 px-4 rounded-lg transition"
-                    >
-                      Reserve
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* COMPONENT: FRICTIONLESS CHECKOUT MODAL */}
-      {reservingItem && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl p-8 shadow-2xl max-w-md w-full relative animate-fade-in">
-            <button onClick={() => setReservingItem(null)} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-            
-            <div className="mb-6">
-              <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1 block">Curbside Pickup</span>
-              <h3 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">{reservingItem.title}</h3>
-              <p className="text-gray-500 text-sm mt-1">{reservingItem.artist} • ${(reservingItem.price_cents / 100).toFixed(2)}</p>
-            </div>
-
-            <form onSubmit={handleReserve} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">First Name</label>
-                <input type="text" required placeholder="e.g., John" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} className="w-full mt-1.5 border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">Email Address (For Receipt)</label>
-                <input type="email" required placeholder="john@example.com" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} className="w-full mt-1.5 border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50" />
-              </div>
-              
-              <button type="submit" disabled={isProcessing} className="w-full bg-emerald-500 hover:bg-emerald-400 text-gray-900 rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 mt-4">
-                {isProcessing ? 'Securing Record...' : 'Confirm Reservation'}
-              </button>
-            </form>
-          </div>
+      {/* RADAR CONSOLE */}
+      <section className="max-w-5xl mx-auto bg-gray-900 rounded-3xl p-10 text-center shadow-2xl relative overflow-hidden mb-12">
+        <div className="relative z-10">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Find Vinyl Vaults Near You</h2>
+          <p className="text-gray-400 mb-8 max-w-xl mx-auto">Lock onto local independent sellers, view their exact distance, and browse their pristine crates before you drive.</p>
+          
+          <button 
+            onClick={handleScanRadar} 
+            disabled={scanning}
+            className="bg-emerald-500 hover:bg-emerald-400 text-gray-900 px-8 py-4 rounded-full font-bold text-lg transition shadow-[0_0_20px_rgba(16,185,129,0.4)] disabled:opacity-70 disabled:scale-95 flex items-center justify-center mx-auto gap-3"
+          >
+            {scanning ? (
+              <>
+                <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-emerald-200 opacity-75"></span>
+                Pinging Satellite...
+              </>
+            ) : (
+              'Scan Local Radar 🎯'
+            )}
+          </button>
+          
+          {errorMsg && <p className="text-red-400 mt-4 font-medium">{errorMsg}</p>}
         </div>
-      )}
+      </section>
 
-      {/* COMPONENT: SUCCESS RECEIPT (THE TROJAN HORSE) */}
-      {successReceipt && (
-        <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl p-10 shadow-2xl max-w-md w-full text-center animate-fade-in">
-            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-emerald-100 mb-6">
-              <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 tracking-tight mb-2">Record Secured!</h3>
-            <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-              We just emailed you the pickup details for <strong>{successReceipt.title}</strong>. The vendor has been notified and is expecting you.
-            </p>
-            
-            {/* The Trojan Horse Upsell */}
-            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
-              <p className="text-xs text-gray-500 font-medium mb-3">Want to list your own vinyl or swap with this vendor?</p>
-              <button onClick={() => window.location.href = '/'} className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-xl py-2.5 text-sm font-semibold transition">
-                Open a Free Seller Vault
+      {/* STOREFRONT RESULTS */}
+      <section className="max-w-5xl mx-auto">
+        {!scanning && stores.length > 0 && (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {stores.map((store) => (
+              <div key={store.store_id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-xl text-gray-900">{store.store_name}</h3>
+                    <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded-md">{store.distance_miles.toFixed(1)} mi</span>
+                  </div>
+                  <p className="text-gray-500 text-sm mb-4 line-clamp-2">{store.store_bio || "Independent local vinyl seller."}</p>
+                </div>
+                
+                <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
+                  <span className="text-sm font-semibold text-gray-500">{store.active_records.length} Records</span>
+                  <button 
+                    onClick={() => setSelectedStore(store)}
+                    className="text-emerald-600 font-bold text-sm hover:text-emerald-700 transition flex items-center gap-1"
+                  >
+                    Open Crate →
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!scanning && stores.length === 0 && !errorMsg && (
+          <div className="text-center text-gray-400 py-12">
+            Radar is standing by. Click scan to locate nearby vaults.
+          </div>
+        )}
+      </section>
+
+      {/* THE CRATE MODAL (Frictionless Browsing) */}
+      {selectedStore && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">{selectedStore.store_name}</h3>
+                <p className="text-sm text-gray-500">{selectedStore.distance_miles.toFixed(1)} miles away</p>
+              </div>
+              <button 
+                onClick={() => setSelectedStore(null)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
+              >
+                ✕
               </button>
             </div>
-
-            <button onClick={() => setSuccessReceipt(null)} className="text-sm font-semibold text-gray-400 hover:text-gray-600 transition">
-              Back to Radar
-            </button>
+            
+            {/* Modal Inventory List */}
+            <div className="p-6 overflow-y-auto bg-white flex-1">
+              {selectedStore.active_records.length === 0 ? (
+                <p className="text-center text-gray-400 italic">This crate is currently empty.</p>
+              ) : (
+                <div className="space-y-4">
+                  {selectedStore.active_records.map((record) => (
+                    <div key={record.id} className="border border-gray-100 rounded-xl p-4 flex justify-between items-center hover:border-emerald-200 transition">
+                      <div>
+                        <h4 className="font-bold text-gray-900">{record.title}</h4>
+                        <p className="text-sm text-gray-500">{record.artist}</p>
+                        <div className="flex gap-2 mt-2">
+                          <span className="text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{record.weight_grams}g</span>
+                          <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Grade: {record.condition}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-lg text-emerald-600">${(record.price_cents / 100).toFixed(2)}</div>
+                        <button className="mt-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition">Reserve</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
