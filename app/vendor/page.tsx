@@ -1,6 +1,5 @@
 'use client';
 
-import StoreSettings from './StoreSettings';
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import BarcodeScanner from '../components/BarcodeScanner';
@@ -12,7 +11,27 @@ interface InventoryItem {
   title: string;
   weight_grams: number;
   price_cents: number;
+  status: string;
+  location?: string;
+  year?: string;
+  genres?: string[];
+  tracklist?: any[];
+  cover_image?: string;
 }
+
+// 1. CREATE THE FORM BLUEPRINT
+const initialFormState = {
+  title: '',
+  artist: '',
+  price: '',
+  weight: '180',
+  quantity: '1',
+  location: '',
+  year: '',
+  genres: [] as string[],
+  tracklist: [] as any[],
+  coverImage: ''
+};
 
 export default function VendorDashboard() {
   // --- AUTHENTICATION STATE (THE BOUNCER) ---
@@ -28,7 +47,6 @@ export default function VendorDashboard() {
     }
   });
 
-
   const [authEmail, setAuthEmail] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
@@ -39,11 +57,9 @@ export default function VendorDashboard() {
   const [loading, setLoading] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<'available' | 'archived'>('available');
   
-  const [title, setTitle] = useState('');
-  const [artist, setArtist] = useState('');
-  const [weight, setWeight] = useState('180');
-  const [price, setPrice] = useState('');
-  const [quantity, setQuantity] = useState('1');
+  // 2. CONSOLIDATED FORM STATE
+  const [formData, setFormData] = useState(initialFormState);
+  
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [barcode, setBarcode] = useState('');
   const [isSearchingDiscogs, setIsSearchingDiscogs] = useState(false);
@@ -55,7 +71,10 @@ export default function VendorDashboard() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchingText, setIsSearchingText] = useState(false);
 
-  // 1. INITIALIZE SESSION BOUNCER
+  // EDIT MODULE STATE
+  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+  const [editFormSubmitting, setEditFormSubmitting] = useState(false);
+
   /* TEST - UNCOMMENT FOR PROD
     useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -70,7 +89,6 @@ export default function VendorDashboard() {
   }, []);
   */
 
-  // 2. MAGIC LINK DISPATCHER
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setAuthLoading(true);
@@ -89,7 +107,6 @@ export default function VendorDashboard() {
     setAuthLoading(false);
   }
 
-  // 3. FETCH INVENTORY (Only runs if unlocked)
   useEffect(() => {
     if (session) {
       fetchInventory(viewMode);
@@ -101,9 +118,8 @@ export default function VendorDashboard() {
       setLoading(true);
       const { data, error } = await supabase
         .from('inventory')
-        .select('id, artist, title, weight_grams, price_cents')
+        .select('id, artist, title, weight_grams, price_cents, location, year, genres, cover_image')
         .eq('status', status)
-        // SECURITY: Only fetch records belonging to the logged-in vendor!
         .eq('vendor_id', session.user.id)
         .order('created_at', { ascending: false });
 
@@ -116,36 +132,48 @@ export default function VendorDashboard() {
     }
   }
 
-  // 4. SECURE INSERTION
+  // 3. UNIVERSAL INPUT HANDLER
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   async function handleAddRecord(e: React.FormEvent) {
     e.preventDefault();
-    if (!title || !artist || !price || !session) return;
+    if (!formData.title || !formData.artist || !formData.price || !session) return;
 
     try {
       setFormSubmitting(true);
-      const priceCents = Math.round(parseFloat(price) * 100);
-      const weightGrams = parseInt(weight, 10) || 180;
+      const priceCents = Math.round(parseFloat(formData.price) * 100);
+      const weightGrams = parseInt(formData.weight, 10) || 180;
 
       const { error } = await supabase.from('inventory').insert([
         {
-          // SECURITY: Tie the record to the real auth token ID, not the fake 0000 ID
           vendor_id: session.user.id,
-          title: title.trim(),
-          artist: artist.trim(),
+          title: formData.title.trim(),
+          artist: formData.artist.trim(),
           weight_grams: weightGrams,
           price_cents: priceCents,
-          quantity: parseInt(quantity, 10) || 1,
+          quantity: parseInt(formData.quantity, 10) || 1,
           status: 'available',
+          location: formData.location.trim(),
+          year: formData.year,
+          genres: formData.genres,
+          tracklist: formData.tracklist,
+          cover_image: formData.coverImage
         },
       ]);
 
       if (error) throw error;
 
-      setTitle('');
-      setArtist('');
-      setPrice('');
+      // Reset form instantly
+      setFormData(initialFormState);
       setViewMode('available');
       await fetchInventory('available');
+      
     } catch (err: any) {
       alert(`Database insertion failure: ${err.message}`);
     } finally {
@@ -153,7 +181,55 @@ export default function VendorDashboard() {
     }
   }
 
-async function handleTextSearch(e?: React.FormEvent) {
+  async function handleUpdateRecord(e: React.FormEvent) {
+    e.preventDefault();
+    if (!itemToEdit || !session) return;
+
+    try {
+      setEditFormSubmitting(true);
+      const priceCents = Math.round(parseFloat(formData.price) * 100);
+      const weightGrams = parseInt(formData.weight, 10) || 180;
+
+      const { error } = await supabase.from('inventory').update({
+          title: formData.title.trim(),
+          artist: formData.artist.trim(),
+          weight_grams: weightGrams,
+          price_cents: priceCents,
+          location: formData.location.trim()
+        }).eq('id', itemToEdit.id);
+
+      if (error) throw error;
+
+      // Clean up and refresh
+      setItemToEdit(null);
+      setFormData(initialFormState);
+      await fetchInventory(viewMode);
+      
+    } catch (err: any) {
+      alert(`Database update failure: ${err.message}`);
+    } finally {
+      setEditFormSubmitting(false);
+    }
+  }
+
+  // Pre-fill the form data object when editing
+  function openEditModal(album: InventoryItem) {
+    setItemToEdit(album);
+    setFormData({
+      ...initialFormState,
+      title: album.title,
+      artist: album.artist,
+      price: (album.price_cents / 100).toFixed(2),
+      weight: album.weight_grams.toString(),
+      location: album.location || '',
+      year: album.year || '',
+      genres: album.genres || [],
+      tracklist: album.tracklist || [],
+      coverImage: album.cover_image || ''
+    });
+  }
+
+  async function handleTextSearch(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!textQuery) return;
     
@@ -171,16 +247,23 @@ async function handleTextSearch(e?: React.FormEvent) {
   }
 
   async function handleSelectRelease(releaseId: number) {
-    setSearchResults([]); // Close the dropdown list
-    setTextQuery('');     // Clear the search box
+    setSearchResults([]); 
+    setTextQuery('');    
     setIsSearchingText(true);
     setLookupError('');
     
     const result = await getDiscogsReleaseDetails(releaseId);
     if (result.success) {
-      setArtist(result.artist);
-      setTitle(result.title);
-      // The deep payload is now successfully grabbed and applied to your inputs!
+      // Bulk update the state!
+      setFormData(prev => ({
+        ...prev,
+        artist: result.artist,
+        title: result.title,
+        year: result.year || '',
+        genres: result.genres || [],
+        tracklist: result.tracklist || [],
+        coverImage: result.cover_image || ''
+      }));
     } else {
       setLookupError(result.error || "Failed to load specific release details.");
     }
@@ -212,7 +295,6 @@ async function handleTextSearch(e?: React.FormEvent) {
     }
   }
 
-  // --- RENDER BOUNCER UI IF NOT LOGGED IN ---
   if (!session) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans">
@@ -243,55 +325,39 @@ async function handleTextSearch(e?: React.FormEvent) {
     );
   }
 
-  // --- RENDER VAULT UI IF LOGGED IN ---
   return (
     <main className="p-8 max-w-5xl mx-auto font-sans relative animate-fade-in">
       <header className="border-b border-gray-200 pb-5 mb-8 flex justify-between items-end">
         <div className="flex items-center gap-4">
-          
-          {/* THE ISOMETRIC CRATE LOGO */}
           <div className="w-12 h-12 flex-shrink-0">
             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-sm">
-              {/* Vinyl Record Sticking Out */}
               <ellipse cx="50" cy="28" rx="24" ry="12" fill="#1F2937" />
               <ellipse cx="50" cy="28" rx="8" ry="4" fill="#059669" />
               <ellipse cx="50" cy="28" rx="2" ry="1" fill="#D1D5DB" />
-              
-              {/* Left Face of Crate */}
               <path d="M15 42 L50 60 L50 92 L15 74 Z" fill="#1F2937" />
-              {/* Right Face of Crate */}
               <path d="M85 42 L50 60 L50 92 L85 74 Z" fill="#374151" />
-              {/* Top Rim of Crate */}
               <path d="M15 42 L50 24 L85 42 L50 60 Z" fill="none" stroke="#059669" strokeWidth="5" strokeLinejoin="round" />
-              
-              {/* Wood Slat Details */}
               <path d="M25 50 L25 80 M35 55 L35 85" stroke="#374151" strokeWidth="2" strokeLinecap="round" />
               <path d="M75 50 L75 80 M65 55 L65 85" stroke="#1F2937" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </div>
-
           <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">TimbreBox</h1>
             <p className="text-emerald-600 text-sm mt-1 font-semibold">Secure Vault Unlocked • {session.user.email}</p>
           </div>
         </div>
-        
         <div className="flex gap-4">
-          <div className="flex gap-4">
-            <a href="/vendor/settings" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">⚙️ Settings</a>
-            <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">View Radar</a>
-            <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg">Sign Out</button>
-          </div>
+          <a href="/vendor/settings" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">⚙️ Settings</a>
+          <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">View Radar</a>
+          <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg">Sign Out</button>
         </div>
       </header>
 
-      {/* COMPONENT A: INTERACTIVE INSERTION ENGINE */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 max-w-3xl mt-8">
         <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight">Add New Stock Insertion</h2>
         
         <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end">
           
-{/* THE DISCOGS TEXT ENGINE */}
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Text Search</span>
@@ -316,7 +382,6 @@ async function handleTextSearch(e?: React.FormEvent) {
               </button>
             </div>
 
-            {/* SEARCH RESULTS DROPDOWN */}
             {searchResults.length > 0 && (
               <div className="mt-3 border border-gray-200 rounded-lg bg-white shadow-sm max-h-64 overflow-y-auto">
                 {searchResults.map((res: any) => (
@@ -342,7 +407,6 @@ async function handleTextSearch(e?: React.FormEvent) {
             )}
           </div>
 
-          {/* THE DISCOGS BARCODE ENGINE */}
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2">
             <div className="flex-1 w-full">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
@@ -373,8 +437,16 @@ async function handleTextSearch(e?: React.FormEvent) {
                 setIsSearchingDiscogs(true);
                 const result = await searchDiscogsByBarcode(barcode);
                 if (result?.success) {
-                  setArtist(result.artist);
-                  setTitle(result.title);
+                  // Bulk update via the barcode API return!
+                  setFormData(prev => ({
+                    ...prev,
+                    artist: result.artist,
+                    title: result.title,
+                    year: result.year || '',
+                    genres: result.genres || [],
+                    tracklist: result.tracklist || [],
+                    coverImage: result.cover_image || ''
+                  }));
                 } else {
                   alert(result?.error || "Barcode lookup failed.");
                 }
@@ -387,14 +459,14 @@ async function handleTextSearch(e?: React.FormEvent) {
             </button>
           </div>
 
-          {/* THE MANUAL INPUT FIELDS */}
           <div className="w-full">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
             <input 
               type="text" 
+              name="title"
               required 
-              value={title} 
-              onChange={(e) => setTitle(e.target.value)} 
+              value={formData.title} 
+              onChange={handleInputChange} 
               className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
               placeholder="e.g. Somethin' Else" 
             />
@@ -404,9 +476,10 @@ async function handleTextSearch(e?: React.FormEvent) {
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist <span className="text-red-500">*</span></label>
             <input 
               type="text" 
+              name="artist"
               required 
-              value={artist} 
-              onChange={(e) => setArtist(e.target.value)} 
+              value={formData.artist} 
+              onChange={handleInputChange} 
               className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
               placeholder="e.g. Cannonball Adderley" 
             />
@@ -416,22 +489,25 @@ async function handleTextSearch(e?: React.FormEvent) {
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($) <span className="text-red-500">*</span></label>
             <input 
               type="number" 
+              name="price"
               step="0.01" 
               required 
-              value={price} 
-              onChange={(e) => setPrice(e.target.value)} 
+              value={formData.price} 
+              onChange={handleInputChange} 
               className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
               placeholder="24.99" 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 w-full items-end">
+          {/* I UPGRADED THIS GRID TO 3 COLUMNS TO HOLD YOUR LOCATION INPUT */}
+          <div className="grid grid-cols-3 gap-3 w-full items-end">
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
               <input 
                 type="number" 
-                value={weight} 
-                onChange={(e) => setWeight(e.target.value)} 
+                name="weight"
+                value={formData.weight} 
+                onChange={handleInputChange} 
                 className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
                 placeholder="180" 
               />
@@ -440,23 +516,33 @@ async function handleTextSearch(e?: React.FormEvent) {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
               <input 
                 type="number" 
+                name="quantity"
                 min="1" 
-                value={quantity} 
-                onChange={(e) => setQuantity(e.target.value)} 
+                value={formData.quantity} 
+                onChange={handleInputChange} 
                 className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
                 placeholder="1" 
               />
             </div>
+            <div>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
+              <input 
+                type="text" 
+                name="location"
+                value={formData.location} 
+                onChange={handleInputChange} 
+                className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                placeholder="e.g. Bin A" 
+              />
+            </div>
           </div>
 
-          {/* DEDICATED ERROR PAPER TRAIL */}
           {lookupError && (
             <div className="sm:col-span-2 md:col-span-4 text-sm font-semibold text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100">
               {lookupError}
             </div>
           )}
 
-          {/* SUBMISSION ACTION */}
           <div className="sm:col-span-2 md:col-span-4 mt-2">
             <button 
               type="submit" 
@@ -471,7 +557,6 @@ async function handleTextSearch(e?: React.FormEvent) {
 
       </section>
 
-      {/* COMPONENT B: DISPLAY MONITOR GRID & TOGGLE TABS */}
       <section>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
           <h2 className="text-xl font-bold text-gray-800 tracking-tight">{viewMode === 'available' ? 'Current Active Stock' : 'Archived Vault History'}</h2>
@@ -490,21 +575,44 @@ async function handleTextSearch(e?: React.FormEvent) {
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {listings.map((album: InventoryItem) => (
-              <div key={album.id} className="border border-gray-200 rounded-2xl p-6 shadow-sm bg-white flex flex-col justify-between transition hover:shadow-md w-full sm:w-72">
-                <div>
-                  <div className="flex justify-between items-start gap-2">
-                    <h3 className="font-bold text-lg text-gray-900 tracking-tight leading-snug mb-1">{album.title}</h3>
-                    {viewMode === 'available' ? (
-                      <button onClick={() => setItemToArchive(album)} className="text-xs font-semibold text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 px-2 py-1 rounded-lg transition border border-gray-200 hover:border-red-100 shrink-0">Archive</button>
-                    ) : (
-                      <button onClick={() => handleRestoreRecord(album.id)} className="text-xs font-semibold text-emerald-600 hover:text-white bg-emerald-50 hover:bg-emerald-500 px-2 py-1 rounded-lg transition border border-emerald-200 hover:border-emerald-600 shrink-0">Restore</button>
-                    )}
+              <div key={album.id} className="border border-gray-200 rounded-2xl p-4 shadow-sm bg-white flex flex-col justify-between transition hover:shadow-md w-full sm:w-80">
+                <div className="flex gap-4 items-start">
+                  {album.cover_image ? (
+                    <img src={album.cover_image} alt="cover" className="w-20 h-20 object-cover rounded-lg shadow-sm shrink-0 border border-gray-100" />
+                  ) : (
+                    <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center shrink-0 border border-gray-200 text-xs text-gray-400 font-medium">No Image</div>
+                  )}
+                  
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-base text-gray-900 tracking-tight leading-snug truncate">{album.title}</h3>
+                    <p className="text-gray-500 font-medium text-sm truncate">{album.artist}</p>
+                    
+                    <div className="flex items-center gap-2 mt-1">
+                      {album.year && <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md">{album.year}</span>}
+                      {album.genres && album.genres.length > 0 && (
+                        <span className="text-xs text-emerald-600 font-medium truncate">{album.genres[0]}</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-gray-500 font-medium text-sm">{album.artist}</p>
                 </div>
-                <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center text-sm">
-                  <span className="text-gray-400 text-xs">Weight: <strong className="font-bold text-gray-700">{album.weight_grams}g</strong></span>
-                  <span className="font-bold text-emerald-600 text-base">${(album.price_cents / 100).toFixed(2)}</span>
+
+                <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
+                  <div className="flex flex-col">
+                    <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Location</span>
+                    <span className="text-gray-700 text-sm font-semibold">{album.location || 'Unassigned'}</span>
+                  </div>
+                  <span className="font-bold text-emerald-600 text-lg">${(album.price_cents / 100).toFixed(2)}</span>
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  {viewMode === 'available' ? (
+                    <>
+                      <button onClick={() => openEditModal(album)} className="flex-1 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg transition">Edit</button>
+                      <button onClick={() => setItemToArchive(album)} className="flex-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 py-2 rounded-lg transition">Archive</button>
+                    </>
+                  ) : (
+                    <button onClick={() => handleRestoreRecord(album.id)} className="w-full text-xs font-semibold text-emerald-600 hover:text-white bg-emerald-50 hover:bg-emerald-500 py-2 rounded-lg transition border border-emerald-200 hover:border-emerald-600">Restore</button>
+                  )}
                 </div>
               </div>
             ))}
@@ -512,7 +620,6 @@ async function handleTextSearch(e?: React.FormEvent) {
         )}
       </section>
 
-      {/* COMPONENT C: ARCHIVE MODAL */}
       {itemToArchive && (
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xl max-w-sm w-full animate-fade-in">
@@ -531,20 +638,57 @@ async function handleTextSearch(e?: React.FormEvent) {
         </div>
       )}
 
-    {/* THE CAMERA MODAL */}
+      {itemToEdit && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-xl max-w-md w-full animate-fade-in">
+            <h3 className="text-lg font-bold text-gray-900 tracking-tight mb-4 border-b border-gray-100 pb-3">Edit Inventory Record</h3>
+            <form onSubmit={handleUpdateRecord} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title</label>
+                <input type="text" name="title" required value={formData.title} onChange={handleInputChange} className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist</label>
+                <input type="text" name="artist" required value={formData.artist} onChange={handleInputChange} className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($)</label>
+                  <input type="number" name="price" step="0.01" required value={formData.price} onChange={handleInputChange} className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
+                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} placeholder="e.g. Bin A" className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-6 pt-2">
+                <button type="button" onClick={() => { setItemToEdit(null); setFormData(initialFormState); }} className="w-full px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-xl text-sm transition text-center">Cancel</button>
+                <button type="submit" disabled={editFormSubmitting} className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition text-center shadow-sm disabled:opacity-50">{editFormSubmitting ? 'Saving...' : 'Save Changes'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showScanner && (
         <BarcodeScanner 
           onClose={() => setShowScanner(false)} 
           onScanSuccess={async (scannedCode) => {
-            setShowScanner(false); // Close the camera
-            setBarcode(scannedCode); // Drop the code in the text box
+            setShowScanner(false);
+            setBarcode(scannedCode);
             
-            // Auto-fire the Discogs API!
             setIsSearchingDiscogs(true);
             const result = await searchDiscogsByBarcode(scannedCode);
             if (result?.success) {
-              setArtist(result.artist);
-              setTitle(result.title);
+              setFormData(prev => ({
+                ...prev,
+                artist: result.artist,
+                title: result.title,
+                year: result.year || '',
+                genres: result.genres || [],
+                tracklist: result.tracklist || [],
+                coverImage: result.cover_image || ''
+              }));
             } else {
               setLookupError(result?.error || "Barcode lookup failed.");
             }
