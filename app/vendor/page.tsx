@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase"; 
-// Make sure these match your exact function names in discogsService.ts!
 import { searchDiscogsByBarcode, searchDiscogsByText } from "../services/discogsService";
 import BarcodeScanner from "../components/BarcodeScanner";
 
@@ -76,7 +75,7 @@ export default function VendorDashboard() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // RESTORED TEXT SEARCH LOGIC
+  // FULLY RESTORED & TYPESCRIPT-SAFE TEXT SEARCH
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!textQuery) return;
@@ -85,13 +84,13 @@ export default function VendorDashboard() {
     setLookupError("");
     
     try {
-      // Assuming you have a text search function in your service. 
-      // If your function is named differently, adjust here!
-      const results = await searchDiscogsByText(textQuery); 
-      if (results && results.length > 0) {
-        setSearchResults(results);
+      const response = await searchDiscogsByText(textQuery); 
+      
+      // Safe check for the response object and nested results array
+      if (response && response.success && response.results && response.results.length > 0) {
+        setSearchResults(response.results);
       } else {
-        setLookupError("No results found for that search.");
+        setLookupError(response?.error || "No results found for that search.");
         setSearchResults([]);
       }
     } catch (err) {
@@ -103,7 +102,7 @@ export default function VendorDashboard() {
   };
 
   const handleSelectRelease = (id: string) => {
-    // Add your release selection logic here when ready
+    // For now, clear results. We can add full selection logic later if needed!
     setSearchResults([]);
   };
 
@@ -406,7 +405,7 @@ export default function VendorDashboard() {
         )}
       </section>
 
-      {/* RESTORED SCANNER MODAL */}
+      {/* FULLY RESTORED SCANNER MODAL */}
       {showScanner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
