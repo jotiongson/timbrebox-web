@@ -3,36 +3,34 @@
 import { useEffect, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
+// We simplified this to only expect what page.tsx is sending
 interface BarcodeScannerProps {
   onDetected: (code: string) => void;
-  onScanSuccess: (barcode: string) => void;
-  onClose: () => void;
 }
 
-export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScannerProps) {
+export default function BarcodeScanner({ onDetected }: BarcodeScannerProps) {
   const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => {
-    // We use the core Html5Qrcode class instead of the UI wrapper
     const html5QrCode = new Html5Qrcode("reader");
 
     const startScanner = async () => {
       try {
         await html5QrCode.start(
-          { facingMode: "environment" }, // This explicitly forces the rear camera
+          { facingMode: "environment" }, 
           {
             fps: 10,
             qrbox: { width: 250, height: 150 },
             aspectRatio: 1.0,
           },
           (decodedText) => {
-            // Success! Stop the camera and send the data back
+            // Success! Stop the camera and pass the code up to page.tsx
             html5QrCode.stop().then(() => {
-              onScanSuccess(decodedText);
+              onDetected(decodedText);
             }).catch(console.error);
           },
           (errorMessage) => {
-            // The scanner throws background errors constantly when searching for a code. We ignore them.
+            // Ignore standard scanning background errors
           }
         );
       } catch (err) {
@@ -43,35 +41,24 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
 
     startScanner();
 
-    // Cleanup: shut down the camera if the user clicks "Close"
+    // Cleanup when the user closes the modal
     return () => {
       if (html5QrCode.isScanning) {
         html5QrCode.stop().catch(console.error);
       }
     };
-  }, [onScanSuccess]);
+  }, [onDetected]);
 
+  // Notice we removed the fixed background wrapper, because page.tsx handles it now!
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative">
-        <div className="p-4 bg-gray-900 flex justify-between items-center">
-          <h3 className="text-white font-bold tracking-wide">Scan Barcode</h3>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-white font-bold px-3 py-1 bg-gray-800 rounded-lg"
-          >
-            Close
-          </button>
+    <div className="w-full bg-black">
+      {scanError ? (
+        <div className="p-8 text-center text-red-600 font-medium bg-white">
+          {scanError}
         </div>
-        
-        {scanError ? (
-          <div className="p-8 text-center text-red-600 font-medium">
-            {scanError}
-          </div>
-        ) : (
-          <div id="reader" className="w-full bg-black min-h-[300px]"></div>
-        )}
-      </div>
+      ) : (
+        <div id="reader" className="w-full min-h-[300px]"></div>
+      )}
     </div>
   );
 }
