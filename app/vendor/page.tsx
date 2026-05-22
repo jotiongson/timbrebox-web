@@ -163,7 +163,7 @@ export default function VendorDashboard() {
           year: formData.year,
           genres: formData.genres,
           tracklist: formData.tracklist,
-          cover_image: formData.coverImage
+          cover_image: formData.coverImage || ""
         },
       ]);
 
@@ -181,36 +181,40 @@ export default function VendorDashboard() {
     }
   }
 
-  async function handleUpdateRecord(e: React.FormEvent) {
-    e.preventDefault();
-    if (!itemToEdit || !session) return;
+async function handleUpdateRecord(e: React.FormEvent) {
+  e.preventDefault();
+  if (!itemToEdit || !session) return;
 
-    try {
-      setEditFormSubmitting(true);
-      const priceCents = Math.round(parseFloat(formData.price) * 100);
-      const weightGrams = parseInt(formData.weight, 10) || 180;
+  try {
+    setEditFormSubmitting(true);
+    const priceCents = Math.round(parseFloat(formData.price) * 100);
+    const weightGrams = parseInt(formData.weight, 10) || 180;
 
-      const { error } = await supabase.from('inventory').update({
-          title: formData.title.trim(),
-          artist: formData.artist.trim(),
-          weight_grams: weightGrams,
-          price_cents: priceCents,
-          location: formData.location.trim()
-        }).eq('id', itemToEdit.id);
+    // Use null-coalescing (|| "") to ensure we never send 'undefined' to the database
+    const { error } = await supabase.from('inventory').update({
+        title: formData.title.trim() || "",
+        artist: formData.artist.trim() || "",
+        weight_grams: weightGrams,
+        price_cents: priceCents,
+        location: formData.location ? formData.location.trim() : null, // Send null if empty
+        year: formData.year || null,
+        genres: formData.genres || [],
+        cover_image: formData.coverImage || "" 
+      }).eq('id', itemToEdit.id);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      // Clean up and refresh
-      setItemToEdit(null);
-      setFormData(initialFormState);
-      await fetchInventory(viewMode);
-      
-    } catch (err: any) {
-      alert(`Database update failure: ${err.message}`);
-    } finally {
-      setEditFormSubmitting(false);
-    }
+    // Clean up and refresh
+    setItemToEdit(null);
+    setFormData(initialFormState);
+    await fetchInventory(viewMode);
+    
+  } catch (err: any) {
+    alert(`Database update failure: ${err.message}`);
+  } finally {
+    setEditFormSubmitting(false);
   }
+}
 
   // Pre-fill the form data object when editing
   function openEditModal(album: InventoryItem) {
@@ -577,8 +581,12 @@ export default function VendorDashboard() {
             {listings.map((album: InventoryItem) => (
               <div key={album.id} className="border border-gray-200 rounded-2xl p-4 shadow-sm bg-white flex flex-col justify-between transition hover:shadow-md w-full sm:w-80">
                 <div className="flex gap-4 items-start">
-                  {album.cover_image ? (
-                    <img src={album.cover_image} alt="cover" className="w-20 h-20 object-cover rounded-lg shadow-sm shrink-0 border border-gray-100" />
+                  {album.cover_image && album.cover_image.length > 0 ? (
+                    <img 
+                      src={album.cover_image} 
+                      alt="cover" 
+                      className="w-20 h-20 object-cover rounded-lg shadow-sm shrink-0 border border-gray-100" 
+                    />
                   ) : (
                     <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center shrink-0 border border-gray-200 text-xs text-gray-400 font-medium">No Image</div>
                   )}
