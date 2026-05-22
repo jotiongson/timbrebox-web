@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// Adjust these import paths if your services are located differently
-import { supabase } from "../services/supabase"; 
+import { supabase } from "../supabase";
 import { searchDiscogsByBarcode } from "../services/discogsService";
 
 interface InventoryItem {
