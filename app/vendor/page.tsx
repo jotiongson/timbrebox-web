@@ -50,6 +50,7 @@ export default function VendorDashboard() {
 
   const [itemToArchive, setItemToArchive] = useState<InventoryItem | null>(null);
   const [archiveProcessing, setArchiveProcessing] = useState(false);
+  const [lookupError, setLookupError] = useState('');
 
   // 1. INITIALIZE SESSION BOUNCER
   /* TEST - UNCOMMENT FOR PROD
@@ -273,6 +274,86 @@ export default function VendorDashboard() {
             </button>
           </div>
 
+          {/* THE MANUAL INPUT FIELDS */}
+          <div className="w-full">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
+            <input 
+              type="text" 
+              required 
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)} 
+              className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+              placeholder="e.g. Somethin' Else" 
+            />
+          </div>
+
+          <div className="w-full">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist <span className="text-red-500">*</span></label>
+            <input 
+              type="text" 
+              required 
+              value={artist} 
+              onChange={(e) => setArtist(e.target.value)} 
+              className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+              placeholder="e.g. Cannonball Adderley" 
+            />
+          </div>
+
+          <div className="w-full">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($) <span className="text-red-500">*</span></label>
+            <input 
+              type="number" 
+              step="0.01" 
+              required 
+              value={price} 
+              onChange={(e) => setPrice(e.target.value)} 
+              className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+              placeholder="24.99" 
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 w-full">
+            <div>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
+              <input 
+                type="number" 
+                value={weight} 
+                onChange={(e) => setWeight(e.target.value)} 
+                className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                placeholder="180" 
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
+              <input 
+                type="number" 
+                min="1" 
+                value={quantity} 
+                onChange={(e) => setQuantity(e.target.value)} 
+                className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                placeholder="1" 
+              />
+            </div>
+          </div>
+
+          {/* DEDICATED ERROR PAPER TRAIL */}
+          {lookupError && (
+            <div className="sm:col-span-2 md:col-span-4 text-sm font-semibold text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100">
+              {lookupError}
+            </div>
+          )}
+
+          {/* SUBMISSION ACTION */}
+          <div className="sm:col-span-2 md:col-span-4 mt-2">
+            <button 
+              type="submit" 
+              disabled={formSubmitting || isSearchingDiscogs} 
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 flex justify-center items-center gap-2"
+            >
+              {formSubmitting ? 'Writing to Vault...' : 'Save to Inventory'}
+            </button>
+          </div>
+
         </form>
 
       </section>
@@ -352,7 +433,7 @@ export default function VendorDashboard() {
               setArtist(result.artist);
               setTitle(result.title);
             } else {
-              alert(result?.error || "Barcode lookup failed.");
+              setLookupError(result?.error || "Barcode lookup failed.");
             }
             setIsSearchingDiscogs(false);
           }} 
