@@ -85,3 +85,60 @@ export async function searchDiscogsByBarcode(barcode: string) {
     return { error: "Failed to communicate with Discogs API." };
   }
 }
+
+export async function searchDiscogsByText(query: string) {
+  const token = process.env.DISCOGS_PAT;
+  if (!token) return { error: "Server configuration error." };
+
+  // type=release ensures we get actual pressings, limiting to 10 results for a clean UI
+  const searchUrl = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=10&token=${token}`;
+
+  try {
+    const response = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'TimbreBoxApp/1.0 +https://timbrebox-web.vercel.app' }
+    });
+    
+    if (!response.ok) throw new Error(`Status: ${response.status}`);
+    
+    const data = await response.json();
+    return { success: true, results: data.results || [] };
+  } catch (error: any) {
+    console.error("[Discogs] Text Search Error:", error.message);
+    return { error: "Failed to search Discogs API." };
+  }
+}
+
+export async function getDiscogsReleaseDetails(releaseId: number) {
+  const token = process.env.DISCOGS_PAT;
+  if (!token) return { error: "Server configuration error." };
+
+  const url = `https://api.discogs.com/releases/${releaseId}?token=${token}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'TimbreBoxApp/1.0 +https://timbrebox-web.vercel.app' }
+    });
+    
+    if (!response.ok) throw new Error(`Status: ${response.status}`);
+    
+    const data = await response.json();
+    
+    // Grab the first artist and strip out Discogs' database numbering (e.g., "Cannonball Adderley (2)")
+    const rawArtist = data.artists && data.artists.length > 0 ? data.artists[0].name : 'Unknown Artist';
+    const cleanArtist = rawArtist.replace(/\s\(\d+\)$/, '');
+    
+    return {
+      success: true,
+      artist: cleanArtist,
+      title: data.title || 'Unknown Title',
+      year: data.year || null,
+      genres: data.genres || [],
+      cover_image: data.images && data.images.length > 0 ? data.images[0].uri : null,
+      tracklist: data.tracklist || [],
+      videos: data.videos || []
+    };
+  } catch (error: any) {
+    console.error("[Discogs] Release Details Error:", error.message);
+    return { error: "Failed to fetch release details." };
+  }
+}
