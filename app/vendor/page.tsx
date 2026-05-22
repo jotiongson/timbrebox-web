@@ -196,6 +196,7 @@ async function handleUpdateRecord(e: React.FormEvent) {
         artist: formData.artist.trim() || "",
         weight_grams: weightGrams,
         price_cents: priceCents,
+        quantity: parseInt(formData.quantity, 10) || 1,
         location: formData.location ? formData.location.trim() : null, // Send null if empty
         year: formData.year || null,
         genres: formData.genres || [],
@@ -503,41 +504,20 @@ async function handleUpdateRecord(e: React.FormEvent) {
             />
           </div>
 
-          {/* I UPGRADED THIS GRID TO 3 COLUMNS TO HOLD YOUR LOCATION INPUT */}
-          <div className="grid grid-cols-3 gap-3 w-full items-end">
-            <div>
+          {/* Change grid-cols-3 to grid-cols-5 for more control */}
+          <div className="grid grid-cols-5 gap-3 w-full items-end">
+            <div className="col-span-1">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
-              <input 
-                type="number" 
-                name="weight"
-                value={formData.weight} 
-                onChange={handleInputChange} 
-                className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-                placeholder="180" 
-              />
+              <input type="number" name="weight" value={formData.weight} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="180" />
             </div>
-            <div>
+            <div className="col-span-1">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
-              <input 
-                type="number" 
-                name="quantity"
-                min="1" 
-                value={formData.quantity} 
-                onChange={handleInputChange} 
-                className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-                placeholder="1" 
-              />
+              <input type="number" name="quantity" min="1" value={formData.quantity} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="1" />
             </div>
-            <div>
+            {/* Give Location more space */}
+            <div className="col-span-3">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-              <input 
-                type="text" 
-                name="location"
-                value={formData.location} 
-                onChange={handleInputChange} 
-                className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-                placeholder="e.g. Bin A" 
-              />
+              <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Bin A - Top Shelf" />
             </div>
           </div>
 
@@ -665,10 +645,13 @@ async function handleUpdateRecord(e: React.FormEvent) {
                   <input type="number" name="price" step="0.01" required value={formData.price} onChange={handleInputChange} className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-                  <input type="text" name="location" value={formData.location} onChange={handleInputChange} placeholder="e.g. Bin A" className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
+                  <input type="number" name="quantity" min="0" required value={formData.quantity} onChange={handleInputChange} className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
                 </div>
-              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
+                <input type="text" name="location" value={formData.location} onChange={handleInputChange} placeholder="e.g. Bin A" className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500" />
+              </div>              </div>
               <div className="grid grid-cols-2 gap-3 mt-6 pt-2">
                 <button type="button" onClick={() => { setItemToEdit(null); setFormData(initialFormState); }} className="w-full px-4 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-xl text-sm transition text-center">Cancel</button>
                 <button type="submit" disabled={editFormSubmitting} className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition text-center shadow-sm disabled:opacity-50">{editFormSubmitting ? 'Saving...' : 'Save Changes'}</button>
