@@ -196,7 +196,7 @@ async function handleUpdateRecord(e: React.FormEvent) {
         artist: formData.artist.trim() || "",
         weight_grams: weightGrams,
         price_cents: priceCents,
-        quantity: parseInt(formData.quantity, 10) || 1,
+        
         location: formData.location ? formData.location.trim() : null, // Send null if empty
         year: formData.year || null,
         genres: formData.genres || [],
@@ -358,37 +358,37 @@ async function handleUpdateRecord(e: React.FormEvent) {
         </div>
       </header>
 
-      <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 max-w-3xl mt-8">
+<section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 w-full max-w-full overflow-hidden mt-8">
         <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight">Add New Stock Insertion</h2>
         
-        <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end">
+        <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end w-full">
           
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2">
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Text Search</span>
               <span className="text-emerald-600 font-medium">Top 10 Matches</span>
             </label>
-            <div className="flex gap-2 mt-1.5">
+            <div className="flex gap-2 mt-1.5 w-full">
               <input 
                 type="text" 
                 placeholder="e.g. Pink Floyd Dark Side" 
                 value={textQuery} 
                 onChange={(e) => setTextQuery(e.target.value)} 
                 onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
               />
               <button 
                 type="button" 
                 onClick={handleTextSearch}
                 disabled={isSearchingText || !textQuery}
-                className="bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
+                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 sm:px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
               >
-                {isSearchingText ? 'Searching...' : 'Search'}
+                {isSearchingText ? '...' : 'Search'}
               </button>
             </div>
 
             {searchResults.length > 0 && (
-              <div className="mt-3 border border-gray-200 rounded-lg bg-white shadow-sm max-h-64 overflow-y-auto">
+              <div className="mt-3 border border-gray-200 rounded-lg bg-white shadow-sm max-h-64 overflow-y-auto w-full">
                 {searchResults.map((res: any) => (
                   <div 
                     key={res.id} 
@@ -396,13 +396,13 @@ async function handleUpdateRecord(e: React.FormEvent) {
                     className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
                   >
                     {res.thumb ? (
-                      <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded shadow-sm" />
+                      <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded shadow-sm flex-shrink-0" />
                     ) : (
-                      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">No Img</div>
+                      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
                     )}
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-gray-900 leading-tight">{res.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">
                         {res.year || 'Unknown Year'} • {res.country || 'Unknown Region'} • {res.format?.slice(0, 2).join(', ') || 'Vinyl'}
                       </p>
                     </div>
@@ -412,24 +412,24 @@ async function handleUpdateRecord(e: React.FormEvent) {
             )}
           </div>
 
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2">
-            <div className="flex-1 w-full">
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2 w-full min-w-0 overflow-hidden">
+            <div className="flex-1 w-full min-w-0">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
                 <span>Barcode Lookup</span>
                 <span className="text-emerald-600 font-medium">Powered by Discogs</span>
               </label>
-              <div className="flex gap-2 mt-1.5">
+              <div className="flex gap-2 mt-1.5 w-full">
                 <input 
                   type="text" 
                   placeholder="Type UPC barcode here..." 
                   value={barcode} 
                   onChange={(e) => setBarcode(e.target.value)} 
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                  className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
                 />
                 <button 
                   type="button"
                   onClick={() => setShowScanner(true)}
-                  className="bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center gap-2 shadow-sm"
+                  className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center gap-2 shadow-sm"
                 >
                   📷 Scan
                 </button>
@@ -442,7 +442,6 @@ async function handleUpdateRecord(e: React.FormEvent) {
                 setIsSearchingDiscogs(true);
                 const result = await searchDiscogsByBarcode(barcode);
                 if (result?.success) {
-                  // Bulk update via the barcode API return!
                   setFormData(prev => ({
                     ...prev,
                     artist: result.artist,
@@ -458,76 +457,50 @@ async function handleUpdateRecord(e: React.FormEvent) {
                 setIsSearchingDiscogs(false);
               }}
               disabled={isSearchingDiscogs || !barcode}
-              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
+              className="w-full sm:w-auto flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
             >
               {isSearchingDiscogs ? 'Searching...' : 'Lookup API'}
             </button>
           </div>
 
-          <div className="w-full">
+          <div className="w-full min-w-0">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              name="title"
-              required 
-              value={formData.title} 
-              onChange={handleInputChange} 
-              className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-              placeholder="e.g. Somethin' Else" 
-            />
+            <input type="text" name="title" required value={formData.title} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Somethin' Else" />
           </div>
 
-          <div className="w-full">
+          <div className="w-full min-w-0">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist <span className="text-red-500">*</span></label>
-            <input 
-              type="text" 
-              name="artist"
-              required 
-              value={formData.artist} 
-              onChange={handleInputChange} 
-              className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-              placeholder="e.g. Cannonball Adderley" 
-            />
+            <input type="text" name="artist" required value={formData.artist} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Cannonball Adderley" />
           </div>
 
-          <div className="w-full">
+          <div className="w-full min-w-0">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($) <span className="text-red-500">*</span></label>
-            <input 
-              type="number" 
-              name="price"
-              step="0.01" 
-              required 
-              value={formData.price} 
-              onChange={handleInputChange} 
-              className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-              placeholder="24.99" 
-            />
+            <input type="number" name="price" step="0.01" required value={formData.price} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="24.99" />
           </div>
 
-          {/* Change grid-cols-3 to grid-cols-5 for more control */}
-          <div className="grid grid-cols-5 gap-3 w-full items-end">
-            <div className="col-span-1">
+          {/* THE FIX: Added sm:col-span-2 md:col-span-4 to stretch this row across the form, and made it wrap on mobile */}
+          <div className="sm:col-span-2 md:col-span-4 grid grid-cols-2 sm:grid-cols-5 gap-3 w-full items-end">
+            <div className="col-span-1 min-w-0">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
-              <input type="number" name="weight" value={formData.weight} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="180" />
+              <input type="number" name="weight" value={formData.weight} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="180" />
             </div>
-            <div className="col-span-1">
+            <div className="col-span-1 min-w-0">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
-              <input type="number" name="quantity" min="1" value={formData.quantity} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="1" />
+              <input type="number" name="quantity" min="1" value={formData.quantity} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="1" />
             </div>
-            {/* Give Location more space */}
-            <div className="col-span-3">
+            <div className="col-span-2 sm:col-span-3 min-w-0">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-              <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Bin A - Top Shelf" />
+              <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Bin A - Top Shelf" />
             </div>
           </div>
 
           {lookupError && (
-            <div className="sm:col-span-2 md:col-span-4 text-sm font-semibold text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100">
+            <div className="sm:col-span-2 md:col-span-4 text-sm font-semibold text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100 w-full break-words">
               {lookupError}
             </div>
           )}
 
-          <div className="sm:col-span-2 md:col-span-4 mt-2">
+          <div className="sm:col-span-2 md:col-span-4 mt-2 w-full">
             <button 
               type="submit" 
               disabled={formSubmitting || isSearchingDiscogs} 
@@ -538,7 +511,6 @@ async function handleUpdateRecord(e: React.FormEvent) {
           </div>
 
         </form>
-
       </section>
 
       <section>
