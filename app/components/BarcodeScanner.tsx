@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface BarcodeScannerProps {
   onScanSuccess: (barcode: string) => void;
@@ -12,33 +12,41 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
   const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initialize the scanner
-    const scanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: { width: 250, height: 150 } },
-      false
-    );
+    // We use the core Html5Qrcode class instead of the UI wrapper
+    const html5QrCode = new Html5Qrcode("reader");
 
-    // What to do when a barcode is found
-    const handleSuccess = (decodedText: string) => {
-      scanner.clear(); // Instantly shut off the camera
-      onScanSuccess(decodedText); // Send the barcode back to the dashboard
-    };
-
-    // Ignore background noise/blur frames
-    const handleError = (err: any) => {
-      // html5-qrcode throws errors constantly when it doesn't see a barcode
-      // We just swallow them quietly, but we log true permission errors
-      if (err?.message?.includes('NotAllowedError')) {
-        setScanError('Camera permission denied.');
+    const startScanner = async () => {
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" }, // This explicitly forces the rear camera
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 150 },
+            aspectRatio: 1.0,
+          },
+          (decodedText) => {
+            // Success! Stop the camera and send the data back
+            html5QrCode.stop().then(() => {
+              onScanSuccess(decodedText);
+            }).catch(console.error);
+          },
+          (errorMessage) => {
+            // The scanner throws background errors constantly when searching for a code. We ignore them.
+          }
+        );
+      } catch (err) {
+        console.error("Camera error:", err);
+        setScanError("Failed to start camera. Make sure permissions are granted.");
       }
     };
 
-    scanner.render(handleSuccess, handleError);
+    startScanner();
 
-    // Cleanup function: turn off the camera if the user closes the modal
+    // Cleanup: shut down the camera if the user clicks "Close"
     return () => {
-      scanner.clear().catch(console.error);
+      if (html5QrCode.isScanning) {
+        html5QrCode.stop().catch(console.error);
+      }
     };
   }, [onScanSuccess]);
 
@@ -58,10 +66,9 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
         {scanError ? (
           <div className="p-8 text-center text-red-600 font-medium">
             {scanError}
-            <p className="text-sm text-gray-500 mt-2">Please allow camera access in your browser settings.</p>
           </div>
         ) : (
-          <div id="reader" className="w-full bg-black"></div>
+          <div id="reader" className="w-full bg-black min-h-[300px]"></div>
         )}
       </div>
     </div>
