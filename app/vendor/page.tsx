@@ -3,8 +3,8 @@
 import StoreSettings from './StoreSettings';
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
-import { searchDiscogsByBarcode } from '../services/discogsService';
 import BarcodeScanner from '../components/BarcodeScanner';
+import { searchDiscogsByBarcode, searchDiscogsByText, getDiscogsReleaseDetails } from '../services/discogsService';
 
 interface InventoryItem {
   id: number;
@@ -51,6 +51,9 @@ export default function VendorDashboard() {
   const [itemToArchive, setItemToArchive] = useState<InventoryItem | null>(null);
   const [archiveProcessing, setArchiveProcessing] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [textQuery, setTextQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchingText, setIsSearchingText] = useState(false);
 
   // 1. INITIALIZE SESSION BOUNCER
   /* TEST - UNCOMMENT FOR PROD
@@ -150,6 +153,40 @@ export default function VendorDashboard() {
     }
   }
 
+async function handleTextSearch(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!textQuery) return;
+    
+    setIsSearchingText(true);
+    setLookupError('');
+    
+    const result = await searchDiscogsByText(textQuery);
+    if (result.success) {
+      setSearchResults(result.results);
+      if (result.results.length === 0) setLookupError("No matches found for that text.");
+    } else {
+      setLookupError(result.error || "Text search failed.");
+    }
+    setIsSearchingText(false);
+  }
+
+  async function handleSelectRelease(releaseId: number) {
+    setSearchResults([]); // Close the dropdown list
+    setTextQuery('');     // Clear the search box
+    setIsSearchingText(true);
+    setLookupError('');
+    
+    const result = await getDiscogsReleaseDetails(releaseId);
+    if (result.success) {
+      setArtist(result.artist);
+      setTitle(result.title);
+      // The deep payload is now successfully grabbed and applied to your inputs!
+    } else {
+      setLookupError(result.error || "Failed to load specific release details.");
+    }
+    setIsSearchingText(false);
+  }
+
   async function confirmArchive() {
     if (!itemToArchive) return;
     try {
@@ -229,6 +266,57 @@ export default function VendorDashboard() {
         
         <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end">
           
+{/* THE DISCOGS TEXT ENGINE */}
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+              <span>Text Search</span>
+              <span className="text-emerald-600 font-medium">Top 10 Matches</span>
+            </label>
+            <div className="flex gap-2 mt-1.5">
+              <input 
+                type="text" 
+                placeholder="e.g. Pink Floyd Dark Side" 
+                value={textQuery} 
+                onChange={(e) => setTextQuery(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+              />
+              <button 
+                type="button" 
+                onClick={handleTextSearch}
+                disabled={isSearchingText || !textQuery}
+                className="bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
+              >
+                {isSearchingText ? 'Searching...' : 'Search'}
+              </button>
+            </div>
+
+            {/* SEARCH RESULTS DROPDOWN */}
+            {searchResults.length > 0 && (
+              <div className="mt-3 border border-gray-200 rounded-lg bg-white shadow-sm max-h-64 overflow-y-auto">
+                {searchResults.map((res: any) => (
+                  <div 
+                    key={res.id} 
+                    onClick={() => handleSelectRelease(res.id)}
+                    className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
+                  >
+                    {res.thumb ? (
+                      <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded shadow-sm" />
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400">No Img</div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-gray-900 leading-tight">{res.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {res.year || 'Unknown Year'} • {res.country || 'Unknown Region'} • {res.format?.slice(0, 2).join(', ') || 'Vinyl'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* THE DISCOGS BARCODE ENGINE */}
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2">
             <div className="flex-1 w-full">
