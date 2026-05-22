@@ -280,10 +280,8 @@ async function handleTextSearch(e?: React.FormEvent) {
           <div className="flex gap-4">
             <a href="/vendor/settings" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">⚙️ Settings</a>
             <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">View Radar</a>
-          <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg">Sign Out</button>
-        </div>
-          <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">View Radar</a>
-          <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg">Sign Out</button>
+            <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg">Sign Out</button>
+          </div>
         </div>
       </header>
 
@@ -427,7 +425,7 @@ async function handleTextSearch(e?: React.FormEvent) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 w-full">
+          <div className="grid grid-cols-2 gap-3 w-full items-end">
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
               <input 
