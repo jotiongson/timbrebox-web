@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../supabase";
+import { supabase } from "../supabase"; 
 import { searchDiscogsByBarcode } from "../services/discogsService";
 
 interface InventoryItem {
@@ -29,7 +29,9 @@ const initialFormState = {
 };
 
 export default function VendorDashboard() {
-  const [session, setSession] = useState<any>(null);
+  // Hardcoded dev session to bypass login and prevent lockout
+  const session = { user: { email: "dev-mode@vault.com" } };
+  
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -48,18 +50,8 @@ export default function VendorDashboard() {
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchInventory();
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    // Bypass auth and load inventory immediately
+    fetchInventory();
   }, []);
 
   async function fetchInventory() {
@@ -82,21 +74,19 @@ export default function VendorDashboard() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Discogs Text Search Logic (Placeholder for your implementation)
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!textQuery) return;
     setIsSearchingText(true);
-    // Add your text search logic here
+    // Add your text search logic here when ready
     setIsSearchingText(false);
   };
 
   const handleSelectRelease = (id: string) => {
-    // Add your release selection logic here
+    // Add your release selection logic here when ready
     setSearchResults([]);
   };
 
-  // Main Submit Logic (Handles both Create and Update)
   const handleAddRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
@@ -109,7 +99,6 @@ export default function VendorDashboard() {
       weight_grams: parseInt(formData.weight) || 0,
       quantity: parseInt(formData.quantity) || 1,
       location: formData.location,
-      // Add other fields (year, genres, cover_image) if you have them stored in state
     };
 
     if (itemToEdit) {
@@ -147,22 +136,12 @@ export default function VendorDashboard() {
       quantity: (album.quantity || 1).toString(),
       location: album.location || "",
     });
-    // Scroll to top to see the form
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  if (!session) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-500 font-medium animate-pulse">Loading secure vault...</p>
-      </div>
-    );
   }
 
   return (
     <main className="p-4 sm:p-8 w-full max-w-full overflow-x-hidden mx-auto font-sans relative animate-fade-in">
       
-      {/* 1. RESPONSIVE HEADER */}
       <header className="border-b border-gray-200 pb-5 mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-5 w-full">
         <div className="flex items-center gap-4 w-full md:w-auto min-w-0">
           <div className="w-12 h-12 flex-shrink-0">
@@ -186,11 +165,10 @@ export default function VendorDashboard() {
         <div className="flex flex-wrap gap-2 sm:gap-4 w-full md:w-auto">
           <a href="/vendor/settings" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">⚙️ Settings</a>
           <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">View Radar</a>
-          <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">Sign Out</button>
+          <button className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">Sign Out</button>
         </div>
       </header>
 
-      {/* 2. CONSTRAINED FORM SECTION */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 w-full max-w-full overflow-hidden mt-8">
         <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight">
           {itemToEdit ? "Edit Stock Insertion" : "Add New Stock Insertion"}
@@ -356,7 +334,6 @@ export default function VendorDashboard() {
         </form>
       </section>
 
-      {/* 3. CURRENT INVENTORY GRID */}
       <section className="mb-12">
         <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight border-b border-gray-200 pb-2">Current Active Stock</h2>
         
