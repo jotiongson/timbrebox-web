@@ -11,6 +11,7 @@ interface VinylRecord {
   price_cents: number;
   weight_grams: number;
   condition: string;
+  quantity: number;
 }
 
 interface Store {
@@ -167,10 +168,11 @@ export default function PublicRadar() {
                       <div>
                         <h4 className="font-bold text-gray-900">{record.title}</h4>
                         <p className="text-sm text-gray-500">{record.artist}</p>
-                        <div className="flex gap-2 mt-2">
-                          <span className="text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{record.weight_grams}g</span>
-                          <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Grade: {record.condition}</span>
-                        </div>
+                          <div className="flex gap-2 mt-2">
+                            <span className="text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{record.weight_grams}g</span>
+                            <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Grade: {record.condition || 'New'}</span>
+                            <span className="text-[10px] uppercase tracking-wider font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Qty: {record.quantity}</span>
+                          </div>
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-lg text-emerald-600">${(record.price_cents / 100).toFixed(2)}</div>

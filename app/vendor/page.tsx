@@ -2,8 +2,9 @@
 
 import StoreSettings from './StoreSettings';
 import { useEffect, useState } from 'react';
-// 1. IMPORT FIXED: Looking UP one level to the app folder
 import { supabase } from '../supabase';
+import { searchDiscogsByBarcode } from '../services/discogsService';
+import BarcodeScanner from '../components/BarcodeScanner';
 
 interface InventoryItem {
   id: number;
@@ -15,10 +16,23 @@ interface InventoryItem {
 
 export default function VendorDashboard() {
   // --- AUTHENTICATION STATE (THE BOUNCER) ---
-  const [session, setSession] = useState<any>(null);
+
+  // PROD UNCOMMENT FOR PROD
+  //const [session, setSession] = useState<any>(null);
+
+  // TEST COMMENT FOR TEST
+  const [session, setSession] = useState<any>({
+    user: {
+      id: '66d6def4-2425-4248-9b90-7c418f1fd4ae',
+      email: 'dev-mode@vault.com'
+    }
+  });
+
+
   const [authEmail, setAuthEmail] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
 
   // --- VAULT STATE ---
   const [listings, setListings] = useState<InventoryItem[]>([]);
@@ -29,13 +43,17 @@ export default function VendorDashboard() {
   const [artist, setArtist] = useState('');
   const [weight, setWeight] = useState('180');
   const [price, setPrice] = useState('');
+  const [quantity, setQuantity] = useState('1');
   const [formSubmitting, setFormSubmitting] = useState(false);
+  const [barcode, setBarcode] = useState('');
+  const [isSearchingDiscogs, setIsSearchingDiscogs] = useState(false);
 
   const [itemToArchive, setItemToArchive] = useState<InventoryItem | null>(null);
   const [archiveProcessing, setArchiveProcessing] = useState(false);
 
   // 1. INITIALIZE SESSION BOUNCER
-  useEffect(() => {
+  /* TEST - UNCOMMENT FOR PROD
+    useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
     });
@@ -46,6 +64,7 @@ export default function VendorDashboard() {
 
     return () => subscription.unsubscribe();
   }, []);
+  */
 
   // 2. MAGIC LINK DISPATCHER
   async function handleLogin(e: React.FormEvent) {
@@ -111,6 +130,7 @@ export default function VendorDashboard() {
           artist: artist.trim(),
           weight_grams: weightGrams,
           price_cents: priceCents,
+          quantity: parseInt(quantity, 10) || 1,
           status: 'available',
         },
       ]);
@@ -207,32 +227,54 @@ export default function VendorDashboard() {
         <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight">Add New Stock Insertion</h2>
         
         <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end">
-          <div className="sm:col-span-2 grid gap-1.5">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Album Title</label>
-            <input type="text" required placeholder="e.g., Somethin' Else" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50" />
-          </div>
-          <div className="grid gap-1.5">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Artist</label>
-            <input type="text" required placeholder="e.g., Cannonball Adderley" value={artist} onChange={(e) => setArtist(e.target.value)} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50" />
-          </div>
-          <div className="grid gap-1.5">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Price (USD)</label>
-            <input type="number" required step="0.01" min="0.01" placeholder="45.00" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50" />
-          </div>
-          <div className="grid gap-1.5 sm:col-span-1 md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Pressing Weight</label>
-            <select value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50">
-              <option value="140">140g (Standard)</option>
-              <option value="180">180g (Premium)</option>
-              <option value="200">200g (UHQR Extra)</option>
-            </select>
-          </div>
-          <div className="grid gap-1.5 sm:col-span-1 md:col-span-2">
-            <button type="submit" disabled={formSubmitting} className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-xl py-2.5 text-sm font-semibold transition shadow-sm disabled:opacity-50">
-              {formSubmitting ? 'Processing Commit...' : 'Commit to Vault'}
+          
+          {/* THE DISCOGS BARCODE ENGINE */}
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2">
+            <div className="flex-1 w-full">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+                <span>Barcode Lookup</span>
+                <span className="text-emerald-600 font-medium">Powered by Discogs</span>
+              </label>
+              <div className="flex gap-2 mt-1.5">
+                <input 
+                  type="text" 
+                  placeholder="Type UPC barcode here..." 
+                  value={barcode} 
+                  onChange={(e) => setBarcode(e.target.value)} 
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowScanner(true)}
+                  className="bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center gap-2 shadow-sm"
+                >
+                  📷 Scan
+                </button>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onClick={async () => {
+                if (!barcode) return;
+                setIsSearchingDiscogs(true);
+                const result = await searchDiscogsByBarcode(barcode);
+                if (result?.success) {
+                  setArtist(result.artist);
+                  setTitle(result.title);
+                } else {
+                  alert(result?.error || "Barcode lookup failed.");
+                }
+                setIsSearchingDiscogs(false);
+              }}
+              disabled={isSearchingDiscogs || !barcode}
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
+            >
+              {isSearchingDiscogs ? 'Searching...' : 'Lookup API'}
             </button>
           </div>
+
         </form>
+
       </section>
 
       {/* COMPONENT B: DISPLAY MONITOR GRID & TOGGLE TABS */}
@@ -294,6 +336,29 @@ export default function VendorDashboard() {
           </div>
         </div>
       )}
+
+    {/* THE CAMERA MODAL */}
+      {showScanner && (
+        <BarcodeScanner 
+          onClose={() => setShowScanner(false)} 
+          onScanSuccess={async (scannedCode) => {
+            setShowScanner(false); // Close the camera
+            setBarcode(scannedCode); // Drop the code in the text box
+            
+            // Auto-fire the Discogs API!
+            setIsSearchingDiscogs(true);
+            const result = await searchDiscogsByBarcode(scannedCode);
+            if (result?.success) {
+              setArtist(result.artist);
+              setTitle(result.title);
+            } else {
+              alert(result?.error || "Barcode lookup failed.");
+            }
+            setIsSearchingDiscogs(false);
+          }} 
+        />
+      )}
+
     </main>
   );
 }
