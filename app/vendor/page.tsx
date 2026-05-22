@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase"; 
-import { searchDiscogsByBarcode } from "../services/discogsService";
+// Make sure these match your exact function names in discogsService.ts!
+import { searchDiscogsByBarcode, searchDiscogsByText } from "../services/discogsService";
+import BarcodeScanner from "../components/BarcodeScanner";
 
 interface InventoryItem {
   id: number;
@@ -74,11 +76,29 @@ export default function VendorDashboard() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // RESTORED TEXT SEARCH LOGIC
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!textQuery) return;
+    
     setIsSearchingText(true);
-    // Add your text search logic here when ready
+    setLookupError("");
+    
+    try {
+      // Assuming you have a text search function in your service. 
+      // If your function is named differently, adjust here!
+      const results = await searchDiscogsByText(textQuery); 
+      if (results && results.length > 0) {
+        setSearchResults(results);
+      } else {
+        setLookupError("No results found for that search.");
+        setSearchResults([]);
+      }
+    } catch (err) {
+      console.error("Text search failed:", err);
+      setLookupError("Search failed. Check your API connection.");
+    }
+    
     setIsSearchingText(false);
   };
 
@@ -385,6 +405,32 @@ export default function VendorDashboard() {
           </div>
         )}
       </section>
+
+      {/* RESTORED SCANNER MODAL */}
+      {showScanner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
+            <button 
+              onClick={() => setShowScanner(false)}
+              className="absolute top-4 right-4 z-10 bg-gray-900 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow hover:bg-gray-700 transition"
+            >
+              ✕
+            </button>
+            <div className="p-4 bg-gray-50 border-b border-gray-200 text-center">
+              <h3 className="font-bold text-gray-900">Scan Barcode</h3>
+              <p className="text-xs text-gray-500">Center the barcode in the camera view</p>
+            </div>
+            
+            <BarcodeScanner 
+              onDetected={(code: string) => {
+                setBarcode(code);
+                setShowScanner(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
