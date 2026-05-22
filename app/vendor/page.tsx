@@ -11,7 +11,7 @@ interface InventoryItem {
   title: string;
   weight_grams: number;
   price_cents: number;
-  status: string;
+  status?: string;
   location?: string;
   year?: string;
   genres?: string[];
