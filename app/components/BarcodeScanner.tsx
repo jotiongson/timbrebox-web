@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 interface BarcodeScannerProps {
+  onDetected: (code: string) => void;
   onScanSuccess: (barcode: string) => void;
   onClose: () => void;
 }
