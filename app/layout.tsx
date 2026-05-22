@@ -15,6 +15,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TimbreBox Sandbox",
   description: "Vinyl Records Inventory Engine",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.png", // Next.js will look in your 'public' folder
+  },
+  appleWebApp: {
+    title: "TimbreBox",
+    statusBarStyle: "default",
+    capable: true,
+  },
 };
 
 export default function RootLayout({
