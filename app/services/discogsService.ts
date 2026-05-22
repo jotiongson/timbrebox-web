@@ -90,8 +90,8 @@ export async function searchDiscogsByText(query: string) {
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
 
-  // type=release ensures we get actual pressings, limiting to 10 results for a clean UI
-  const searchUrl = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&per_page=10&token=${token}`;
+  // type=release and format=vinyl ensures we only get physical records, no CDs or cassettes
+  const searchUrl = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&format=vinyl&per_page=10&token=${token}`;
 
   try {
     const response = await fetch(searchUrl, {

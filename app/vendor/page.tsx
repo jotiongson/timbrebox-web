@@ -247,18 +247,45 @@ async function handleTextSearch(e?: React.FormEvent) {
   return (
     <main className="p-8 max-w-5xl mx-auto font-sans relative animate-fade-in">
       <header className="border-b border-gray-200 pb-5 mb-8 flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">TimbreBox</h1>
-          <p className="text-emerald-600 text-sm mt-1 font-semibold">Secure Vault Unlocked • {session.user.email}</p>
+        <div className="flex items-center gap-4">
+          
+          {/* THE ISOMETRIC CRATE LOGO */}
+          <div className="w-12 h-12 flex-shrink-0">
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-sm">
+              {/* Vinyl Record Sticking Out */}
+              <ellipse cx="50" cy="28" rx="24" ry="12" fill="#1F2937" />
+              <ellipse cx="50" cy="28" rx="8" ry="4" fill="#059669" />
+              <ellipse cx="50" cy="28" rx="2" ry="1" fill="#D1D5DB" />
+              
+              {/* Left Face of Crate */}
+              <path d="M15 42 L50 60 L50 92 L15 74 Z" fill="#1F2937" />
+              {/* Right Face of Crate */}
+              <path d="M85 42 L50 60 L50 92 L85 74 Z" fill="#374151" />
+              {/* Top Rim of Crate */}
+              <path d="M15 42 L50 24 L85 42 L50 60 Z" fill="none" stroke="#059669" strokeWidth="5" strokeLinejoin="round" />
+              
+              {/* Wood Slat Details */}
+              <path d="M25 50 L25 80 M35 55 L35 85" stroke="#374151" strokeWidth="2" strokeLinecap="round" />
+              <path d="M75 50 L75 80 M65 55 L65 85" stroke="#1F2937" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </div>
+
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">TimbreBox</h1>
+            <p className="text-emerald-600 text-sm mt-1 font-semibold">Secure Vault Unlocked • {session.user.email}</p>
+          </div>
         </div>
+        
         <div className="flex gap-4">
+          <div className="flex gap-4">
+            <a href="/vendor/settings" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">⚙️ Settings</a>
+            <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">View Radar</a>
+          <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg">Sign Out</button>
+        </div>
           <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg">View Radar</a>
           <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg">Sign Out</button>
         </div>
       </header>
-
-      {/* NEW: THE STORE SETTINGS MODULE */}
-      <StoreSettings userId={session.user.id} />
 
       {/* COMPONENT A: INTERACTIVE INSERTION ENGINE */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 max-w-3xl mt-8">
