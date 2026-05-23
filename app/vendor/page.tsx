@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase"; 
-// ADDED getDiscogsReleaseDetails TO THE IMPORT
 import { searchDiscogsByBarcode, searchDiscogsByText, getDiscogsReleaseDetails } from "../services/discogsService";
 import BarcodeScanner from "../components/BarcodeScanner";
 
@@ -24,25 +23,27 @@ interface InventoryItem {
 const initialFormState = {
   title: "",
   artist: "",
-  price: "",
+  price: "0", // Defaults to 0 for rapid scanning
   weight: "",
   quantity: "1",
   location: "",
 };
 
 export default function VendorDashboard() {
-  // FIXED: Added a dummy UUID so Supabase doesn't throw a null vendor_id error
   const session = { user: { id: "00000000-0000-0000-0000-000000000000", email: "dev-mode@vault.com" } };
   
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Form & Search States
+  // Form & Discogs Search States
   const [formData, setFormData] = useState(initialFormState);
   const [barcode, setBarcode] = useState("");
   const [textQuery, setTextQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   
+  // Local Vault Search State
+  const [localSearch, setLocalSearch] = useState("");
+
   // Loading & UI States
   const [isSearchingDiscogs, setIsSearchingDiscogs] = useState(false);
   const [isSearchingText, setIsSearchingText] = useState(false);
@@ -52,7 +53,6 @@ export default function VendorDashboard() {
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
 
   useEffect(() => {
-    // Bypass auth and load inventory immediately
     fetchInventory();
   }, []);
 
@@ -100,9 +100,8 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  // FIXED: Now actually fetches the deep release details when you click an item!
   const handleSelectRelease = async (id: number) => {
-    setIsSearchingDiscogs(true); // Disables form while fetching
+    setIsSearchingDiscogs(true);
     const result = await getDiscogsReleaseDetails(id);
 
     if (result?.success) {
@@ -113,14 +112,15 @@ export default function VendorDashboard() {
         year: result.year || '',
         genres: result.genres || [],
         tracklist: result.tracklist || [],
-        coverImage: result.cover_image || ''
+        coverImage: result.cover_image || '',
+        weight: result.weight || prev.weight 
       }));
     } else {
       alert(result?.error || "Failed to fetch album details.");
     }
     
-    setSearchResults([]); // Close dropdown
-    setIsSearchingDiscogs(false); // Re-enable form
+    setSearchResults([]); 
+    setIsSearchingDiscogs(false); 
   };
 
   const handleAddRecord = async (e: React.FormEvent) => {
@@ -128,7 +128,6 @@ export default function VendorDashboard() {
     setFormSubmitting(true);
     setLookupError("");
 
-    // FIXED: Added vendor_id to the payload
     const payload = {
       vendor_id: session.user.id, 
       title: formData.title,
@@ -140,6 +139,7 @@ export default function VendorDashboard() {
     };
 
     if (itemToEdit) {
+      // Manual Edit Mode
       const { error } = await supabase
         .from("inventory")
         .update(payload)
@@ -148,17 +148,41 @@ export default function VendorDashboard() {
       if (error) setLookupError(error.message);
       else {
         setItemToEdit(null);
-        setFormData(initialFormState);
+        setFormData({ ...initialFormState, location: formData.location });
         fetchInventory();
       }
     } else {
-      const { error } = await supabase.from("inventory").insert([payload]);
-      if (error) {
-        setLookupError(error.message);
+      // OVERRIDE LOGIC
+      const { data: existingMatches } = await supabase
+        .from("inventory")
+        .select("id")
+        .eq("title", payload.title)
+        .eq("artist", payload.artist)
+        .eq("vendor_id", session.user.id)
+        .limit(1);
+
+      if (existingMatches && existingMatches.length > 0) {
+        const { error } = await supabase
+          .from("inventory")
+          .update(payload)
+          .eq("id", existingMatches[0].id);
+
+        if (error) {
+          setLookupError(error.message);
+        } else {
+          setFormData({ ...initialFormState, location: formData.location });
+          setBarcode("");
+          fetchInventory();
+        }
       } else {
-        setFormData(initialFormState);
-        setBarcode("");
-        fetchInventory();
+        const { error } = await supabase.from("inventory").insert([payload]);
+        if (error) {
+          setLookupError(error.message);
+        } else {
+          setFormData({ ...initialFormState, location: formData.location });
+          setBarcode("");
+          fetchInventory();
+        }
       }
     }
     setFormSubmitting(false);
@@ -178,8 +202,21 @@ export default function VendorDashboard() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // Powerful Real-time Local Filtering Logic
+  const filteredInventory = inventory.filter((album) => {
+    if (!localSearch) return true;
+    const searchLower = localSearch.toLowerCase();
+    
+    return (
+      album.title.toLowerCase().includes(searchLower) ||
+      album.artist.toLowerCase().includes(searchLower) ||
+      (album.location && album.location.toLowerCase().includes(searchLower)) ||
+      (album.weight_grams && album.weight_grams.toString() === searchLower)
+    );
+  });
+
   return (
-    <main className="p-4 sm:p-8 w-full max-w-full overflow-x-hidden mx-auto font-sans relative animate-fade-in">
+    <main className="p-4 sm:p-8 w-full max-w-full overflow-x-hidden mx-auto font-sans relative animate-fade-in pb-20">
       
       <header className="border-b border-gray-200 pb-5 mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-5 w-full">
         <div className="flex items-center gap-4 w-full md:w-auto min-w-0">
@@ -215,6 +252,24 @@ export default function VendorDashboard() {
         
         <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end w-full">
           
+          {/* THE VIP LOCATION FIELD - Moved to the very top! */}
+          <div className="sm:col-span-2 md:col-span-4 bg-emerald-50 border-2 border-emerald-500 rounded-xl p-5 mb-2 shadow-sm w-full">
+            <label className="text-sm font-black text-emerald-900 uppercase tracking-widest flex items-center justify-between mb-2">
+              <span className="flex items-center gap-2">📍 Active Vault Location</span>
+              <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-1 rounded-md font-bold">REQUIRED FOR BATCH SCAN</span>
+            </label>
+            <input 
+              type="text" 
+              name="location" 
+              required // Forces the user to fill this before saving
+              value={formData.location} 
+              onChange={handleInputChange} 
+              className="w-full border border-emerald-300 rounded-lg px-4 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 bg-white placeholder:font-normal placeholder:text-gray-400" 
+              placeholder="e.g. Crate 1, Bin A, New Arrivals..." 
+            />
+            <p className="text-xs text-emerald-700 mt-2 font-semibold">Set this once. It stays locked while you scan records into this bin.</p>
+          </div>
+
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Text Search</span>
@@ -327,10 +382,11 @@ export default function VendorDashboard() {
 
           <div className="w-full min-w-0">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($) <span className="text-red-500">*</span></label>
-            <input type="number" name="price" step="0.01" required value={formData.price} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="24.99" />
+            <input type="number" name="price" step="0.01" required value={formData.price} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="0" />
           </div>
 
-          <div className="sm:col-span-2 md:col-span-4 grid grid-cols-2 sm:grid-cols-5 gap-3 w-full items-end">
+          {/* Location has been removed from this bottom row to avoid duplicates */}
+          <div className="sm:col-span-2 md:col-span-4 grid grid-cols-2 gap-3 w-full items-end">
             <div className="col-span-1 min-w-0">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
               <input type="number" name="weight" value={formData.weight} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="180" />
@@ -338,10 +394,6 @@ export default function VendorDashboard() {
             <div className="col-span-1 min-w-0">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
               <input type="number" name="quantity" min="1" value={formData.quantity} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="1" />
-            </div>
-            <div className="col-span-2 sm:col-span-3 min-w-0">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-              <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Bin A - Top Shelf" />
             </div>
           </div>
 
@@ -373,51 +425,76 @@ export default function VendorDashboard() {
         </form>
       </section>
 
-      <section className="mb-12">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight border-b border-gray-200 pb-2">Current Active Stock</h2>
+      <section className="mb-12 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+        
+        <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 tracking-tight">Items List</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Showing {filteredInventory.length} of {inventory.length} total records</p>
+          </div>
+          
+          <div className="w-full sm:w-64 relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+            <input 
+              type="text" 
+              placeholder="Search local vault..." 
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+            />
+          </div>
+        </div>
         
         {loading ? (
-          <p className="text-gray-500 animate-pulse">Loading inventory...</p>
-        ) : inventory.length === 0 ? (
-          <div className="bg-white rounded-xl p-8 text-center border border-gray-200 border-dashed">
-            <p className="text-gray-500 font-medium">Your vault is empty. Start scanning!</p>
+          <div className="p-8 text-center text-gray-500 animate-pulse">Loading vault data...</div>
+        ) : filteredInventory.length === 0 ? (
+          <div className="p-12 text-center">
+            <p className="text-gray-500 font-medium">No records found matching your search.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 w-full">
-            {inventory.map((album) => (
-              <div key={album.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition group flex flex-col w-full overflow-hidden">
-                <div className="flex gap-4 items-start w-full">
-                   {album.cover_image ? (
-                      <img src={album.cover_image} alt="cover" className="w-16 h-16 object-cover rounded shadow-sm flex-shrink-0" />
+          <div className="divide-y divide-gray-100 flex flex-col w-full">
+            {filteredInventory.map((album) => (
+              <div key={album.id} className="p-3 sm:p-4 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group">
+                
+                {album.cover_image ? (
+                  <img src={album.cover_image} alt="cover" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded shadow-sm flex-shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded flex items-center justify-center flex-shrink-0 border border-gray-200">
+                    <span className="text-sm opacity-40">💿</span>
+                  </div>
+                )}
+                
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <div className="flex justify-between items-end mb-0.5">
+                    <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate pr-2">{album.title}</h3>
+                    <span className="font-bold text-emerald-600 text-sm sm:text-base flex-shrink-0">${(album.price_cents / 100).toFixed(2)}</span>
+                  </div>
+                  
+                  <p className="text-gray-500 text-xs font-medium truncate mb-1.5">{album.artist}</p>
+                  
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {album.location ? (
+                       <span className="inline-flex items-center bg-gray-900 text-white text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">
+                         📍 {album.location}
+                       </span>
                     ) : (
-                      <div className="w-16 h-16 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
-                        <span className="text-2xl opacity-40">💿</span>
-                      </div>
+                       <span className="inline-flex items-center bg-red-50 text-red-600 border border-red-100 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">
+                         Unassigned
+                       </span>
                     )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-gray-900 text-lg leading-tight truncate">{album.title}</h3>
-                    <p className="text-gray-500 text-sm font-medium mt-1 truncate">{album.artist}</p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded font-semibold">{album.weight_grams}g</span>
-                      {album.year && <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded font-semibold">{album.year}</span>}
-                    </div>
+                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">{album.weight_grams}g</span>
+                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">x{album.quantity || 1}</span>
                   </div>
                 </div>
-                
-                <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center w-full">
-                  <div className="flex flex-col min-w-0 pr-2">
-                    <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Loc / Qty</span>
-                    <span className="text-gray-700 text-sm font-semibold truncate">
-                      {album.location || 'Unassigned'} <span className="text-emerald-600 ml-1">• x{album.quantity || 1}</span>
-                    </span>
-                  </div>
-                  <span className="font-bold text-emerald-600 text-lg flex-shrink-0">${(album.price_cents / 100).toFixed(2)}</span>
-                </div>
-                
-                <div className="mt-4 flex gap-2 w-full">
-                  <button onClick={() => openEditModal(album)} className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 py-1.5 rounded-lg text-xs font-bold transition">
-                    Edit
-                  </button>
+
+                <div className="flex-shrink-0 pl-2">
+                   <button 
+                     onClick={() => openEditModal(album)} 
+                     className="text-gray-400 hover:text-emerald-600 bg-gray-50 hover:bg-emerald-100 border border-gray-200 rounded p-2 transition focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                     aria-label="Edit item"
+                   >
+                     ✏️
+                   </button>
                 </div>
               </div>
             ))}
@@ -425,7 +502,6 @@ export default function VendorDashboard() {
         )}
       </section>
 
-      {/* FULLY RESTORED SCANNER MODAL */}
       {showScanner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
