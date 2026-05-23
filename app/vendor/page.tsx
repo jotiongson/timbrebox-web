@@ -20,7 +20,6 @@ interface InventoryItem {
   cover_image?: string;
 }
 
-// FIX: Added cover_image to the base state so it can be tracked
 const initialFormState = {
   title: "",
   artist: "",
@@ -78,7 +77,6 @@ export default function VendorDashboard() {
     setIsUpdating(true);
     setLookupError("");
 
-    // FIX: Added cover_image to the payload
     const payload = {
       vendor_id: session.user.id, 
       title: dataToSave.title,
@@ -129,7 +127,6 @@ export default function VendorDashboard() {
     setIsUpdating(true);
 
     if (itemToEdit) {
-      // It's an Edit (Include cover_image)
       const payload = {
         title: editFormData.title,
         artist: editFormData.artist,
@@ -150,10 +147,27 @@ export default function VendorDashboard() {
       }
       setIsUpdating(false);
     } else {
-      // It's a Manual Add
       await executeSave(editFormData);
       setIsModalOpen(false);
     }
+  };
+
+  // --- DELETION LOGIC ---
+  const handleDeleteRecord = async (id: number) => {
+    const confirmDelete = window.confirm("Are you sure you want to permanently delete this record from your vault?");
+    if (!confirmDelete) return;
+
+    setIsUpdating(true);
+    const { error } = await supabase.from("inventory").delete().eq("id", id);
+    
+    if (error) {
+      alert("Error deleting record: " + error.message);
+    } else {
+      setIsModalOpen(false);
+      setItemToEdit(null);
+      fetchInventory(); // Refresh the list after deleting
+    }
+    setIsUpdating(false);
   };
 
   function openEditModal(album: InventoryItem) {
@@ -165,7 +179,7 @@ export default function VendorDashboard() {
       weight: album.weight_grams.toString(),
       quantity: (album.quantity || 1).toString(),
       location: album.location || "",
-      cover_image: album.cover_image || "", // FIX: Pass existing image to edit state
+      cover_image: album.cover_image || "", 
     });
     setIsModalOpen(true);
   }
@@ -189,7 +203,7 @@ export default function VendorDashboard() {
         weight: newRecordData.weight || "",
         quantity: newRecordData.quantity || "1",
         location: newRecordData.location || formData.location,
-        cover_image: newRecordData.cover_image // Pass the image to the review modal
+        cover_image: newRecordData.cover_image 
       });
       setIsModalOpen(true);
       if (!newRecordData.location) setLookupError("Please set a location before saving.");
@@ -204,7 +218,6 @@ export default function VendorDashboard() {
     const result = await searchDiscogsByBarcode(code);
     
     if (result?.success) {
-      // FIX: Added cover_image back to the API handoff
       const newRecordData = {
         ...formData,
         artist: result.artist,
@@ -227,7 +240,6 @@ export default function VendorDashboard() {
     const result = await getDiscogsReleaseDetails(id);
 
     if (result?.success) {
-      // FIX: Added cover_image back to the API handoff
       const newRecordData = {
         ...formData,
         artist: result.artist,
@@ -577,11 +589,24 @@ export default function VendorDashboard() {
               </form>
             </div>
 
-            <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
+            {/* --- MODAL FOOTER WITH NEW DELETE BUTTON --- */}
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-2 sm:gap-3">
+              {itemToEdit && (
+                <button 
+                  type="button" 
+                  onClick={() => handleDeleteRecord(itemToEdit.id)}
+                  disabled={isUpdating}
+                  className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl px-4 py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 flex items-center justify-center"
+                  aria-label="Delete record"
+                  title="Permanently Delete Record"
+                >
+                  🗑️
+                </button>
+              )}
               <button 
                 type="button" 
                 onClick={() => { setIsModalOpen(false); setItemToEdit(null); }}
-                className="w-1/3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl py-3.5 text-sm font-bold transition shadow-sm"
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl py-3.5 text-sm font-bold transition shadow-sm"
               >
                 Cancel
               </button>
@@ -589,9 +614,9 @@ export default function VendorDashboard() {
                 type="submit" 
                 form="recordForm"
                 disabled={isUpdating} 
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50"
+                className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50"
               >
-                {isUpdating ? 'Saving...' : (itemToEdit ? 'Update Inventory' : 'Save to Inventory')}
+                {isUpdating ? 'Saving...' : (itemToEdit ? 'Update' : 'Save')}
               </button>
             </div>
 
