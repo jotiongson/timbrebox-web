@@ -165,7 +165,7 @@ export default function VendorDashboard() {
     } else {
       setIsModalOpen(false);
       setItemToEdit(null);
-      fetchInventory(); 
+      fetchInventory(); // Refresh the list after deleting
     }
     setIsUpdating(false);
   };
@@ -354,43 +354,51 @@ export default function VendorDashboard() {
             />
           </div>
 
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-              <span>Barcode Lookup</span>
-              <span className="text-emerald-600 font-medium">Powered by Discogs</span>
-            </label>
-            <div className="flex gap-2 mt-1.5 w-full">
-              <input 
-                type="text" 
-                placeholder="Type UPC barcode here and press Enter..." 
-                value={barcode} 
-                disabled={isSearchingDiscogs}
-                onChange={(e) => setBarcode(e.target.value)} 
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
-                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
-              />
-              <button 
-                type="button"
-                onClick={() => setShowScanner(true)}
-                disabled={isSearchingDiscogs}
-                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-w-[100px]"
-              >
-                {isSearchingDiscogs ? '⏳ ...' : '📷 Scan'}
-              </button>
-            </div>
-            
-            <div className="mt-3 flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                id="autoSaveToggle"
-                checked={autoSave}
-                onChange={(e) => setAutoSave(e.target.checked)}
-                className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
-              />
-              <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
-                Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2 w-full min-w-0 overflow-hidden">
+            <div className="flex-1 w-full min-w-0">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+                <span>Barcode Lookup</span>
+                <span className="text-emerald-600 font-medium">Powered by Discogs</span>
               </label>
+              <div className="flex gap-2 mt-1.5 w-full">
+                <input 
+                  type="text" 
+                  placeholder="Type UPC barcode here..." 
+                  value={barcode} 
+                  onChange={(e) => setBarcode(e.target.value)} 
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
+                  className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowScanner(true)}
+                  className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center gap-2 shadow-sm"
+                >
+                  📷 Scan
+                </button>
+              </div>
+              
+              <div className="mt-3 flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="autoSaveToggle"
+                  checked={autoSave}
+                  onChange={(e) => setAutoSave(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
+                />
+                <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                  Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
+                </label>
+              </div>
             </div>
+            <button 
+              type="button" 
+              onClick={() => processBarcodeLookup(barcode)}
+              disabled={isSearchingDiscogs || !barcode}
+              className="w-full sm:w-auto flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
+            >
+              {isSearchingDiscogs ? 'Searching...' : 'Lookup API'}
+            </button>
           </div>
 
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
