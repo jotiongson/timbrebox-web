@@ -391,14 +391,7 @@ export default function VendorDashboard() {
                 </label>
               </div>
             </div>
-            <button 
-              type="button" 
-              onClick={() => processBarcodeLookup(barcode)}
-              disabled={isSearchingDiscogs || !barcode}
-              className="w-full sm:w-auto flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
-            >
-              {isSearchingDiscogs ? 'Searching...' : 'Lookup API'}
-            </button>
+
           </div>
 
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
