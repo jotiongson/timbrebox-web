@@ -123,7 +123,7 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false); 
   };
 
-  const handleAddRecord = async (e: React.FormEvent) => {
+const handleAddRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
     setLookupError("");
@@ -139,7 +139,7 @@ export default function VendorDashboard() {
     };
 
     if (itemToEdit) {
-      // Manual Edit Mode
+      // 1. MANUAL EDIT MODE: Updates everything (price, qty, weight, etc.)
       const { error } = await supabase
         .from("inventory")
         .update(payload)
@@ -152,7 +152,7 @@ export default function VendorDashboard() {
         fetchInventory();
       }
     } else {
-      // OVERRIDE LOGIC
+      // 2. QUICK SCAN MODE
       const { data: existingMatches } = await supabase
         .from("inventory")
         .select("id")
@@ -162,9 +162,10 @@ export default function VendorDashboard() {
         .limit(1);
 
       if (existingMatches && existingMatches.length > 0) {
+        // OVERRIDE LOGIC: ONLY update the location! Do not touch price or qty.
         const { error } = await supabase
           .from("inventory")
-          .update(payload)
+          .update({ location: formData.location }) // <-- The crucial fix
           .eq("id", existingMatches[0].id);
 
         if (error) {
@@ -175,7 +176,9 @@ export default function VendorDashboard() {
           fetchInventory();
         }
       } else {
+        // BRAND NEW RECORD: Insert the full payload ($0 price and 1 qty applied)
         const { error } = await supabase.from("inventory").insert([payload]);
+        
         if (error) {
           setLookupError(error.message);
         } else {
@@ -187,7 +190,7 @@ export default function VendorDashboard() {
     }
     setFormSubmitting(false);
   };
-
+  
   function openEditModal(album: InventoryItem) {
     setItemToEdit(album);
     setFormData({
