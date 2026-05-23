@@ -35,13 +35,19 @@ export default function VendorDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Form, Toggle & Search States
+  // MAIN FORM (For Insertions & Scanning Only)
   const [formData, setFormData] = useState(initialFormState);
   const [barcode, setBarcode] = useState("");
   const [textQuery, setTextQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [autoSave, setAutoSave] = useState(true); // Defaulted to true for rapid scanning!
+  const [autoSave, setAutoSave] = useState(true); 
   const [localSearch, setLocalSearch] = useState("");
+
+  // EDIT MODAL STATE (Completely separated from the main form)
+  const [editFormData, setEditFormData] = useState(initialFormState);
+  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Loading & UI States
   const [isSearchingDiscogs, setIsSearchingDiscogs] = useState(false);
@@ -49,7 +55,6 @@ export default function VendorDashboard() {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [lookupError, setLookupError] = useState("");
   const [showScanner, setShowScanner] = useState(false);
-  const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
 
   useEffect(() => {
     fetchInventory();
@@ -75,8 +80,13 @@ export default function VendorDashboard() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // --- CORE DATABASE SAVING LOGIC (Extracted for programmatic access) ---
-  const executeSave = async (dataToSave: typeof initialFormState, isEditMode: boolean, editId?: number) => {
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setEditFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // --- MAIN INSERTION LOGIC (Rapid Scanning) ---
+  const executeSave = async (dataToSave: typeof initialFormState) => {
     setFormSubmitting(true);
     setLookupError("");
 
@@ -90,44 +100,34 @@ export default function VendorDashboard() {
       location: dataToSave.location,
     };
 
-    if (isEditMode && editId) {
-      const { error } = await supabase.from("inventory").update(payload).eq("id", editId);
+    // OVERRIDE LOGIC FOR SCANS
+    const { data: existingMatches } = await supabase
+      .from("inventory")
+      .select("id")
+      .eq("title", payload.title)
+      .eq("artist", payload.artist)
+      .eq("vendor_id", session.user.id)
+      .limit(1);
+
+    if (existingMatches && existingMatches.length > 0) {
+      const { error } = await supabase
+        .from("inventory")
+        .update({ location: payload.location }) 
+        .eq("id", existingMatches[0].id);
+
       if (error) setLookupError(error.message);
       else {
-        setItemToEdit(null);
         setFormData({ ...initialFormState, location: dataToSave.location });
+        setBarcode("");
         fetchInventory();
       }
     } else {
-      // OVERRIDE LOGIC
-      const { data: existingMatches } = await supabase
-        .from("inventory")
-        .select("id")
-        .eq("title", payload.title)
-        .eq("artist", payload.artist)
-        .eq("vendor_id", session.user.id)
-        .limit(1);
-
-      if (existingMatches && existingMatches.length > 0) {
-        const { error } = await supabase
-          .from("inventory")
-          .update({ location: payload.location }) // Only override location
-          .eq("id", existingMatches[0].id);
-
-        if (error) setLookupError(error.message);
-        else {
-          setFormData({ ...initialFormState, location: dataToSave.location });
-          setBarcode("");
-          fetchInventory();
-        }
-      } else {
-        const { error } = await supabase.from("inventory").insert([payload]);
-        if (error) setLookupError(error.message);
-        else {
-          setFormData({ ...initialFormState, location: dataToSave.location });
-          setBarcode("");
-          fetchInventory();
-        }
+      const { error } = await supabase.from("inventory").insert([payload]);
+      if (error) setLookupError(error.message);
+      else {
+        setFormData({ ...initialFormState, location: dataToSave.location });
+        setBarcode("");
+        fetchInventory();
       }
     }
     setFormSubmitting(false);
@@ -135,10 +135,54 @@ export default function VendorDashboard() {
 
   const handleAddRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    await executeSave(formData, !!itemToEdit, itemToEdit?.id);
+    await executeSave(formData);
   };
 
-  // --- NEW: THE AUTOMATED PIPELINE ---
+  // --- DEDICATED EDIT LOGIC ---
+  const handleUpdateRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!itemToEdit) return;
+    
+    setIsUpdating(true);
+    const payload = {
+      title: editFormData.title,
+      artist: editFormData.artist,
+      price_cents: Math.round(parseFloat(editFormData.price) * 100),
+      weight_grams: parseInt(editFormData.weight) || 0,
+      quantity: parseInt(editFormData.quantity) || 1,
+      location: editFormData.location,
+    };
+
+    const { error } = await supabase
+      .from("inventory")
+      .update(payload)
+      .eq("id", itemToEdit.id);
+
+    setIsUpdating(false);
+
+    if (error) {
+      alert("Error updating record: " + error.message);
+    } else {
+      setIsEditModalOpen(false);
+      setItemToEdit(null);
+      fetchInventory();
+    }
+  };
+
+  function openEditModal(album: InventoryItem) {
+    setItemToEdit(album);
+    setEditFormData({
+      title: album.title,
+      artist: album.artist,
+      price: (album.price_cents / 100).toFixed(2),
+      weight: album.weight_grams.toString(),
+      quantity: (album.quantity || 1).toString(),
+      location: album.location || "",
+    });
+    setIsEditModalOpen(true);
+  }
+
+  // --- SCANNER & API LOGIC ---
   const processBarcodeLookup = async (code: string) => {
     if (!code) return;
     setIsSearchingDiscogs(true);
@@ -158,16 +202,13 @@ export default function VendorDashboard() {
         weight: result.weight || formData.weight
       };
 
-      // Update the UI form so the user sees it
       setFormData(newRecordData);
 
-      // If Auto-Save is on, fire it straight into the database!
       if (autoSave) {
-        // We ensure location is provided before auto-saving
         if (!newRecordData.location) {
           setLookupError("Auto-save paused: Please set your Active Vault Location first.");
         } else {
-          await executeSave(newRecordData, false);
+          await executeSave(newRecordData);
         }
       }
     } else {
@@ -175,7 +216,6 @@ export default function VendorDashboard() {
     }
     setIsSearchingDiscogs(false);
   };
-
 
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
@@ -218,9 +258,8 @@ export default function VendorDashboard() {
       
       setFormData(newRecordData);
 
-      // We can also trigger Auto-Save on Text Selection if they want!
       if (autoSave && newRecordData.location) {
-        await executeSave(newRecordData, false);
+        await executeSave(newRecordData);
       } else if (autoSave && !newRecordData.location) {
         setLookupError("Auto-save paused: Please set your Active Vault Location first.");
       }
@@ -232,20 +271,6 @@ export default function VendorDashboard() {
     setSearchResults([]); 
     setIsSearchingDiscogs(false); 
   };
-
-  function openEditModal(album: InventoryItem) {
-    setItemToEdit(album);
-    setFormData({
-      ...initialFormState,
-      title: album.title,
-      artist: album.artist,
-      price: (album.price_cents / 100).toFixed(2),
-      weight: album.weight_grams.toString(),
-      quantity: (album.quantity || 1).toString(),
-      location: album.location || "",
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
 
   const filteredInventory = inventory.filter((album) => {
     if (!localSearch) return true;
@@ -289,10 +314,9 @@ export default function VendorDashboard() {
         </div>
       </header>
 
+      {/* --- MAIN INSERTION STATION --- */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 w-full max-w-full overflow-hidden mt-8">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight">
-          {itemToEdit ? "Edit Stock Insertion" : "Add New Stock Insertion"}
-        </h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight">Add New Stock Insertion</h2>
         
         <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end w-full">
           
@@ -337,7 +361,6 @@ export default function VendorDashboard() {
                 </button>
               </div>
               
-              {/* THE AUTO-SAVE CHECKBOX */}
               <div className="mt-3 flex items-center gap-2">
                 <input 
                   type="checkbox" 
@@ -350,7 +373,6 @@ export default function VendorDashboard() {
                   Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
                 </label>
               </div>
-
             </div>
             <button 
               type="button" 
@@ -444,27 +466,19 @@ export default function VendorDashboard() {
           )}
 
           <div className="sm:col-span-2 md:col-span-4 mt-2 w-full flex gap-3">
-             {itemToEdit && (
-              <button 
-                type="button" 
-                onClick={() => { setItemToEdit(null); setFormData(initialFormState); }}
-                className="w-1/3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl py-3.5 text-sm font-bold transition shadow-sm"
-              >
-                Cancel Edit
-              </button>
-            )}
             <button 
               type="submit" 
               disabled={formSubmitting || isSearchingDiscogs} 
-              className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 flex justify-center items-center gap-2"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 flex justify-center items-center gap-2"
             >
-              {formSubmitting ? 'Writing to Vault...' : (itemToEdit ? 'Update Inventory' : 'Save to Inventory')}
+              {formSubmitting ? 'Writing to Vault...' : 'Save to Inventory'}
             </button>
           </div>
 
         </form>
       </section>
 
+      {/* --- INVENTORY LIST --- */}
       <section className="mb-12 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
         
         <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -542,15 +556,86 @@ export default function VendorDashboard() {
         )}
       </section>
 
+      {/* --- THE NEW EDIT OVERLAY MODAL --- */}
+      {isEditModalOpen && itemToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
+            
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-900 text-lg">Edit Inventory Record</h3>
+              <button 
+                onClick={() => { setIsEditModalOpen(false); setItemToEdit(null); }}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
+              >✕</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              <form id="editForm" onSubmit={handleUpdateRecord} className="flex flex-col gap-4">
+                
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
+                  <input type="text" name="title" required value={editFormData.title} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist <span className="text-red-500">*</span></label>
+                  <input type="text" name="artist" required value={editFormData.artist} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($) <span className="text-red-500">*</span></label>
+                    <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
+                    <input type="text" name="location" value={editFormData.location} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
+                    <input type="number" name="weight" value={editFormData.weight} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
+                    <input type="number" name="quantity" min="1" value={editFormData.quantity} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
+              <button 
+                type="button" 
+                onClick={() => { setIsEditModalOpen(false); setItemToEdit(null); }}
+                className="w-1/3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl py-3.5 text-sm font-bold transition shadow-sm"
+              >
+                Cancel Edit
+              </button>
+              <button 
+                type="submit" 
+                form="editForm"
+                disabled={isUpdating} 
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50"
+              >
+                {isUpdating ? 'Updating...' : 'Update Inventory'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- BARCODE SCANNER MODAL --- */}
       {showScanner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
             <button 
               onClick={() => setShowScanner(false)}
               className="absolute top-4 right-4 z-10 bg-gray-900 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow hover:bg-gray-700 transition"
-            >
-              ✕
-            </button>
+            >✕</button>
             <div className="p-4 bg-gray-50 border-b border-gray-200 text-center">
               <h3 className="font-bold text-gray-900">Scan Barcode</h3>
               <p className="text-xs text-gray-500">Center the barcode in the camera view</p>
@@ -560,7 +645,6 @@ export default function VendorDashboard() {
               onDetected={async (code: string) => {
                 setBarcode(code);
                 setShowScanner(false);
-                // THE MAGIC TRIGGER: Fires the lookup and auto-save instantly
                 await processBarcodeLookup(code);
               }}
             />
