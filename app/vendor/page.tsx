@@ -23,7 +23,7 @@ interface InventoryItem {
 const initialFormState = {
   title: "",
   artist: "",
-  price: "0", // Defaults to 0 for rapid scanning
+  price: "0", 
   weight: "",
   quantity: "1",
   location: "",
@@ -35,13 +35,12 @@ export default function VendorDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Form & Discogs Search States
+  // Form, Toggle & Search States
   const [formData, setFormData] = useState(initialFormState);
   const [barcode, setBarcode] = useState("");
   const [textQuery, setTextQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  
-  // Local Vault Search State
+  const [autoSave, setAutoSave] = useState(true); // Defaulted to true for rapid scanning!
   const [localSearch, setLocalSearch] = useState("");
 
   // Loading & UI States
@@ -76,6 +75,108 @@ export default function VendorDashboard() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // --- CORE DATABASE SAVING LOGIC (Extracted for programmatic access) ---
+  const executeSave = async (dataToSave: typeof initialFormState, isEditMode: boolean, editId?: number) => {
+    setFormSubmitting(true);
+    setLookupError("");
+
+    const payload = {
+      vendor_id: session.user.id, 
+      title: dataToSave.title,
+      artist: dataToSave.artist,
+      price_cents: Math.round(parseFloat(dataToSave.price) * 100),
+      weight_grams: parseInt(dataToSave.weight) || 0,
+      quantity: parseInt(dataToSave.quantity) || 1,
+      location: dataToSave.location,
+    };
+
+    if (isEditMode && editId) {
+      const { error } = await supabase.from("inventory").update(payload).eq("id", editId);
+      if (error) setLookupError(error.message);
+      else {
+        setItemToEdit(null);
+        setFormData({ ...initialFormState, location: dataToSave.location });
+        fetchInventory();
+      }
+    } else {
+      // OVERRIDE LOGIC
+      const { data: existingMatches } = await supabase
+        .from("inventory")
+        .select("id")
+        .eq("title", payload.title)
+        .eq("artist", payload.artist)
+        .eq("vendor_id", session.user.id)
+        .limit(1);
+
+      if (existingMatches && existingMatches.length > 0) {
+        const { error } = await supabase
+          .from("inventory")
+          .update({ location: payload.location }) // Only override location
+          .eq("id", existingMatches[0].id);
+
+        if (error) setLookupError(error.message);
+        else {
+          setFormData({ ...initialFormState, location: dataToSave.location });
+          setBarcode("");
+          fetchInventory();
+        }
+      } else {
+        const { error } = await supabase.from("inventory").insert([payload]);
+        if (error) setLookupError(error.message);
+        else {
+          setFormData({ ...initialFormState, location: dataToSave.location });
+          setBarcode("");
+          fetchInventory();
+        }
+      }
+    }
+    setFormSubmitting(false);
+  };
+
+  const handleAddRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeSave(formData, !!itemToEdit, itemToEdit?.id);
+  };
+
+  // --- NEW: THE AUTOMATED PIPELINE ---
+  const processBarcodeLookup = async (code: string) => {
+    if (!code) return;
+    setIsSearchingDiscogs(true);
+    setLookupError("");
+    
+    const result = await searchDiscogsByBarcode(code);
+    
+    if (result?.success) {
+      const newRecordData = {
+        ...formData,
+        artist: result.artist,
+        title: result.title,
+        year: result.year || '',
+        genres: result.genres || [],
+        tracklist: result.tracklist || [],
+        coverImage: result.cover_image || '',
+        weight: result.weight || formData.weight
+      };
+
+      // Update the UI form so the user sees it
+      setFormData(newRecordData);
+
+      // If Auto-Save is on, fire it straight into the database!
+      if (autoSave) {
+        // We ensure location is provided before auto-saving
+        if (!newRecordData.location) {
+          setLookupError("Auto-save paused: Please set your Active Vault Location first.");
+        } else {
+          await executeSave(newRecordData, false);
+        }
+      }
+    } else {
+      setLookupError(result?.error || "Barcode lookup failed.");
+    }
+    setIsSearchingDiscogs(false);
+  };
+
+
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!textQuery) return;
@@ -85,7 +186,6 @@ export default function VendorDashboard() {
     
     try {
       const response = await searchDiscogsByText(textQuery); 
-      
       if (response && response.success && response.results && response.results.length > 0) {
         setSearchResults(response.results);
       } else {
@@ -105,16 +205,26 @@ export default function VendorDashboard() {
     const result = await getDiscogsReleaseDetails(id);
 
     if (result?.success) {
-      setFormData(prev => ({
-        ...prev,
+      const newRecordData = {
+        ...formData,
         artist: result.artist,
         title: result.title,
         year: result.year || '',
         genres: result.genres || [],
         tracklist: result.tracklist || [],
         coverImage: result.cover_image || '',
-        weight: result.weight || prev.weight 
-      }));
+        weight: result.weight || formData.weight 
+      };
+      
+      setFormData(newRecordData);
+
+      // We can also trigger Auto-Save on Text Selection if they want!
+      if (autoSave && newRecordData.location) {
+        await executeSave(newRecordData, false);
+      } else if (autoSave && !newRecordData.location) {
+        setLookupError("Auto-save paused: Please set your Active Vault Location first.");
+      }
+
     } else {
       alert(result?.error || "Failed to fetch album details.");
     }
@@ -123,74 +233,6 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false); 
   };
 
-const handleAddRecord = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormSubmitting(true);
-    setLookupError("");
-
-    const payload = {
-      vendor_id: session.user.id, 
-      title: formData.title,
-      artist: formData.artist,
-      price_cents: Math.round(parseFloat(formData.price) * 100),
-      weight_grams: parseInt(formData.weight) || 0,
-      quantity: parseInt(formData.quantity) || 1,
-      location: formData.location,
-    };
-
-    if (itemToEdit) {
-      // 1. MANUAL EDIT MODE: Updates everything (price, qty, weight, etc.)
-      const { error } = await supabase
-        .from("inventory")
-        .update(payload)
-        .eq("id", itemToEdit.id);
-
-      if (error) setLookupError(error.message);
-      else {
-        setItemToEdit(null);
-        setFormData({ ...initialFormState, location: formData.location });
-        fetchInventory();
-      }
-    } else {
-      // 2. QUICK SCAN MODE
-      const { data: existingMatches } = await supabase
-        .from("inventory")
-        .select("id")
-        .eq("title", payload.title)
-        .eq("artist", payload.artist)
-        .eq("vendor_id", session.user.id)
-        .limit(1);
-
-      if (existingMatches && existingMatches.length > 0) {
-        // OVERRIDE LOGIC: ONLY update the location! Do not touch price or qty.
-        const { error } = await supabase
-          .from("inventory")
-          .update({ location: formData.location }) // <-- The crucial fix
-          .eq("id", existingMatches[0].id);
-
-        if (error) {
-          setLookupError(error.message);
-        } else {
-          setFormData({ ...initialFormState, location: formData.location });
-          setBarcode("");
-          fetchInventory();
-        }
-      } else {
-        // BRAND NEW RECORD: Insert the full payload ($0 price and 1 qty applied)
-        const { error } = await supabase.from("inventory").insert([payload]);
-        
-        if (error) {
-          setLookupError(error.message);
-        } else {
-          setFormData({ ...initialFormState, location: formData.location });
-          setBarcode("");
-          fetchInventory();
-        }
-      }
-    }
-    setFormSubmitting(false);
-  };
-  
   function openEditModal(album: InventoryItem) {
     setItemToEdit(album);
     setFormData({
@@ -205,7 +247,6 @@ const handleAddRecord = async (e: React.FormEvent) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // Powerful Real-time Local Filtering Logic
   const filteredInventory = inventory.filter((album) => {
     if (!localSearch) return true;
     const searchLower = localSearch.toLowerCase();
@@ -255,7 +296,6 @@ const handleAddRecord = async (e: React.FormEvent) => {
         
         <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end w-full">
           
-          {/* THE VIP LOCATION FIELD - Moved to the very top! */}
           <div className="sm:col-span-2 md:col-span-4 bg-emerald-50 border-2 border-emerald-500 rounded-xl p-5 mb-2 shadow-sm w-full">
             <label className="text-sm font-black text-emerald-900 uppercase tracking-widest flex items-center justify-between mb-2">
               <span className="flex items-center gap-2">📍 Active Vault Location</span>
@@ -264,13 +304,62 @@ const handleAddRecord = async (e: React.FormEvent) => {
             <input 
               type="text" 
               name="location" 
-              required // Forces the user to fill this before saving
+              required 
               value={formData.location} 
               onChange={handleInputChange} 
               className="w-full border border-emerald-300 rounded-lg px-4 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 bg-white placeholder:font-normal placeholder:text-gray-400" 
               placeholder="e.g. Crate 1, Bin A, New Arrivals..." 
             />
             <p className="text-xs text-emerald-700 mt-2 font-semibold">Set this once. It stays locked while you scan records into this bin.</p>
+          </div>
+
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2 w-full min-w-0 overflow-hidden">
+            <div className="flex-1 w-full min-w-0">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+                <span>Barcode Lookup</span>
+                <span className="text-emerald-600 font-medium">Powered by Discogs</span>
+              </label>
+              <div className="flex gap-2 mt-1.5 w-full">
+                <input 
+                  type="text" 
+                  placeholder="Type UPC barcode here..." 
+                  value={barcode} 
+                  onChange={(e) => setBarcode(e.target.value)} 
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
+                  className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowScanner(true)}
+                  className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center gap-2 shadow-sm"
+                >
+                  📷 Scan
+                </button>
+              </div>
+              
+              {/* THE AUTO-SAVE CHECKBOX */}
+              <div className="mt-3 flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="autoSaveToggle"
+                  checked={autoSave}
+                  onChange={(e) => setAutoSave(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
+                />
+                <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                  Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
+                </label>
+              </div>
+
+            </div>
+            <button 
+              type="button" 
+              onClick={() => processBarcodeLookup(barcode)}
+              disabled={isSearchingDiscogs || !barcode}
+              className="w-full sm:w-auto flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
+            >
+              {isSearchingDiscogs ? 'Searching...' : 'Lookup API'}
+            </button>
           </div>
 
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
@@ -322,57 +411,6 @@ const handleAddRecord = async (e: React.FormEvent) => {
             )}
           </div>
 
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2 w-full min-w-0 overflow-hidden">
-            <div className="flex-1 w-full min-w-0">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-                <span>Barcode Lookup</span>
-                <span className="text-emerald-600 font-medium">Powered by Discogs</span>
-              </label>
-              <div className="flex gap-2 mt-1.5 w-full">
-                <input 
-                  type="text" 
-                  placeholder="Type UPC barcode here..." 
-                  value={barcode} 
-                  onChange={(e) => setBarcode(e.target.value)} 
-                  className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-                />
-                <button 
-                  type="button"
-                  onClick={() => setShowScanner(true)}
-                  className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center gap-2 shadow-sm"
-                >
-                  📷 Scan
-                </button>
-              </div>
-            </div>
-            <button 
-              type="button" 
-              onClick={async () => {
-                if (!barcode) return;
-                setIsSearchingDiscogs(true);
-                const result = await searchDiscogsByBarcode(barcode);
-                if (result?.success) {
-                  setFormData(prev => ({
-                    ...prev,
-                    artist: result.artist,
-                    title: result.title,
-                    year: result.year || '',
-                    genres: result.genres || [],
-                    tracklist: result.tracklist || [],
-                    coverImage: result.cover_image || ''
-                  }));
-                } else {
-                  alert(result?.error || "Barcode lookup failed.");
-                }
-                setIsSearchingDiscogs(false);
-              }}
-              disabled={isSearchingDiscogs || !barcode}
-              className="w-full sm:w-auto flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
-            >
-              {isSearchingDiscogs ? 'Searching...' : 'Lookup API'}
-            </button>
-          </div>
-
           <div className="w-full min-w-0">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
             <input type="text" name="title" required value={formData.title} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Somethin' Else" />
@@ -388,7 +426,6 @@ const handleAddRecord = async (e: React.FormEvent) => {
             <input type="number" name="price" step="0.01" required value={formData.price} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="0" />
           </div>
 
-          {/* Location has been removed from this bottom row to avoid duplicates */}
           <div className="sm:col-span-2 md:col-span-4 grid grid-cols-2 gap-3 w-full items-end">
             <div className="col-span-1 min-w-0">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
@@ -520,9 +557,11 @@ const handleAddRecord = async (e: React.FormEvent) => {
             </div>
             
             <BarcodeScanner 
-              onDetected={(code: string) => {
+              onDetected={async (code: string) => {
                 setBarcode(code);
                 setShowScanner(false);
+                // THE MAGIC TRIGGER: Fires the lookup and auto-save instantly
+                await processBarcodeLookup(code);
               }}
             />
           </div>
