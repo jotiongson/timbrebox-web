@@ -12,6 +12,7 @@ interface VinylRecord {
   weight_grams: number;
   condition: string;
   quantity: number;
+  location?: string;
 }
 
 interface Store {
@@ -172,6 +173,12 @@ export default function PublicRadar() {
                             <span className="text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{record.weight_grams}g</span>
                             <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Grade: {record.condition || 'New'}</span>
                             <span className="text-[10px] uppercase tracking-wider font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Qty: {record.quantity}</span>
+                            {/* NEW LOCATION TAG */}
+                            {record.location && (
+                              <span className="text-[10px] uppercase tracking-wider font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
+                                Loc: {record.location}
+                              </span>
+                            )}
                           </div>
                       </div>
                       <div className="text-right">
