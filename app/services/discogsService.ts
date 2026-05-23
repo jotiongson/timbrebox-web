@@ -41,7 +41,7 @@ export async function searchDiscogsByBarcode(barcode: string) {
 
       console.log(`[Discogs] Match found: ${artist} - ${title} (ID: ${releaseId})`);
 
-      // STEP 2: The Deep Fetch (Get the Tracks and Videos)
+      // STEP 2: The Deep Fetch (Get the Tracks, Videos, and Weight)
       const releaseUrl = `https://api.discogs.com/releases/${releaseId}?token=${token}`;
       const releaseResponse = await fetch(releaseUrl, {
         headers: {
@@ -53,6 +53,7 @@ export async function searchDiscogsByBarcode(barcode: string) {
       let videos = [];
       let genres = bestMatch.genre || [];
       let year = bestMatch.year || null;
+      let extractedWeight = '';
 
       if (releaseResponse.ok) {
         const releaseData = await releaseResponse.json();
@@ -60,6 +61,18 @@ export async function searchDiscogsByBarcode(barcode: string) {
         videos = releaseData.videos || [];
         year = releaseData.year || year;
         genres = releaseData.genres || genres;
+        
+        // --- THE WEIGHT HUNTER ---
+        if (releaseData.formats && releaseData.formats.length > 0) {
+          const descriptions = releaseData.formats[0].descriptions || [];
+          const weightTag = descriptions.find((d: string) => d.toLowerCase().includes('gram') || d.toLowerCase().match(/\d+g/));
+          if (weightTag) {
+            const numMatch = weightTag.match(/\d+/);
+            if (numMatch) extractedWeight = numMatch[0];
+          }
+        }
+        // -------------------------
+        
         console.log(`[Discogs] Deep fetch successful: Found ${tracklist.length} tracks and ${videos.length} videos.`);
       } else {
         console.warn(`[Discogs] Deep fetch failed for ID ${releaseId}, returning shallow data.`);
@@ -74,7 +87,8 @@ export async function searchDiscogsByBarcode(barcode: string) {
         genres: genres,
         cover_image: bestMatch.cover_image || null,
         tracklist: tracklist,
-        videos: videos
+        videos: videos,
+        weight: extractedWeight
       };
     }
 
@@ -127,6 +141,20 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
     const rawArtist = data.artists && data.artists.length > 0 ? data.artists[0].name : 'Unknown Artist';
     const cleanArtist = rawArtist.replace(/\s\(\d+\)$/, '');
     
+    // --- THE WEIGHT HUNTER ---
+    let extractedWeight = '';
+    if (data.formats && data.formats.length > 0) {
+      const descriptions = data.formats[0].descriptions || [];
+      // Look for any tag containing "gram" or "g" attached to a number
+      const weightTag = descriptions.find((d: string) => d.toLowerCase().includes('gram') || d.toLowerCase().match(/\d+g/));
+      if (weightTag) {
+        // Pull just the numbers out of the string (e.g., "180 Gram" -> "180")
+        const numMatch = weightTag.match(/\d+/);
+        if (numMatch) extractedWeight = numMatch[0];
+      }
+    }
+    // -------------------------
+    
     return {
       success: true,
       artist: cleanArtist,
@@ -135,7 +163,8 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
       genres: data.genres || [],
       cover_image: data.images && data.images.length > 0 ? data.images[0].uri : null,
       tracklist: data.tracklist || [],
-      videos: data.videos || []
+      videos: data.videos || [],
+      weight: extractedWeight // We now return the extracted weight!
     };
   } catch (error: any) {
     console.error("[Discogs] Release Details Error:", error.message);
