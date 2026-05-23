@@ -20,6 +20,7 @@ interface InventoryItem {
   cover_image?: string;
 }
 
+// FIX: Added cover_image to the base state so it can be tracked
 const initialFormState = {
   title: "",
   artist: "",
@@ -27,6 +28,7 @@ const initialFormState = {
   weight: "",
   quantity: "1",
   location: "",
+  cover_image: "", 
 };
 
 export default function VendorDashboard() {
@@ -36,14 +38,14 @@ export default function VendorDashboard() {
   const [loading, setLoading] = useState(true);
   
   // MAIN DASHBOARD STATES
-  const [formData, setFormData] = useState(initialFormState); // Only used to track Active Location now
+  const [formData, setFormData] = useState(initialFormState); 
   const [barcode, setBarcode] = useState("");
   const [textQuery, setTextQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [autoSave, setAutoSave] = useState(true); 
   const [localSearch, setLocalSearch] = useState("");
 
-  // UNIVERSAL MODAL STATES (Handles both Edits and Manual Adds)
+  // UNIVERSAL MODAL STATES 
   const [editFormData, setEditFormData] = useState(initialFormState);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,6 +78,7 @@ export default function VendorDashboard() {
     setIsUpdating(true);
     setLookupError("");
 
+    // FIX: Added cover_image to the payload
     const payload = {
       vendor_id: session.user.id, 
       title: dataToSave.title,
@@ -84,6 +87,7 @@ export default function VendorDashboard() {
       weight_grams: parseInt(dataToSave.weight) || 0,
       quantity: parseInt(dataToSave.quantity) || 1,
       location: dataToSave.location,
+      cover_image: dataToSave.cover_image, 
     };
 
     // OVERRIDE LOGIC FOR SCANS
@@ -98,7 +102,7 @@ export default function VendorDashboard() {
     if (existingMatches && existingMatches.length > 0) {
       const { error } = await supabase
         .from("inventory")
-        .update({ location: payload.location }) 
+        .update({ location: payload.location, cover_image: payload.cover_image }) 
         .eq("id", existingMatches[0].id);
 
       if (error) setLookupError(error.message);
@@ -119,13 +123,13 @@ export default function VendorDashboard() {
     setIsUpdating(false);
   };
 
-  // --- UNIVERSAL MODAL SUBMIT (Handles Updates AND Manual Saves) ---
+  // --- UNIVERSAL MODAL SUBMIT ---
   const handleModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUpdating(true);
 
     if (itemToEdit) {
-      // It's an Edit
+      // It's an Edit (Include cover_image)
       const payload = {
         title: editFormData.title,
         artist: editFormData.artist,
@@ -133,6 +137,7 @@ export default function VendorDashboard() {
         weight_grams: parseInt(editFormData.weight) || 0,
         quantity: parseInt(editFormData.quantity) || 1,
         location: editFormData.location,
+        cover_image: editFormData.cover_image,
       };
 
       const { error } = await supabase.from("inventory").update(payload).eq("id", itemToEdit.id);
@@ -145,7 +150,7 @@ export default function VendorDashboard() {
       }
       setIsUpdating(false);
     } else {
-      // It's a Manual Add or an off-autosave review
+      // It's a Manual Add
       await executeSave(editFormData);
       setIsModalOpen(false);
     }
@@ -160,6 +165,7 @@ export default function VendorDashboard() {
       weight: album.weight_grams.toString(),
       quantity: (album.quantity || 1).toString(),
       location: album.location || "",
+      cover_image: album.cover_image || "", // FIX: Pass existing image to edit state
     });
     setIsModalOpen(true);
   }
@@ -173,10 +179,8 @@ export default function VendorDashboard() {
   // --- SCANNER & API PIPELINE ---
   const handlePipelineRouting = async (newRecordData: typeof initialFormState) => {
     if (autoSave && newRecordData.location) {
-      // Fast path: Straight to the database
       await executeSave(newRecordData);
     } else {
-      // Review path: Send it to the modal
       setItemToEdit(null);
       setEditFormData({
         title: newRecordData.title,
@@ -184,7 +188,8 @@ export default function VendorDashboard() {
         price: newRecordData.price || "0",
         weight: newRecordData.weight || "",
         quantity: newRecordData.quantity || "1",
-        location: newRecordData.location || formData.location
+        location: newRecordData.location || formData.location,
+        cover_image: newRecordData.cover_image // Pass the image to the review modal
       });
       setIsModalOpen(true);
       if (!newRecordData.location) setLookupError("Please set a location before saving.");
@@ -199,6 +204,7 @@ export default function VendorDashboard() {
     const result = await searchDiscogsByBarcode(code);
     
     if (result?.success) {
+      // FIX: Added cover_image back to the API handoff
       const newRecordData = {
         ...formData,
         artist: result.artist,
@@ -206,7 +212,8 @@ export default function VendorDashboard() {
         price: "0",
         weight: result.weight || "",
         quantity: "1",
-        location: formData.location
+        location: formData.location,
+        cover_image: result.cover_image || "" 
       };
       await handlePipelineRouting(newRecordData);
     } else {
@@ -220,6 +227,7 @@ export default function VendorDashboard() {
     const result = await getDiscogsReleaseDetails(id);
 
     if (result?.success) {
+      // FIX: Added cover_image back to the API handoff
       const newRecordData = {
         ...formData,
         artist: result.artist,
@@ -227,7 +235,8 @@ export default function VendorDashboard() {
         price: "0",
         weight: result.weight || "",
         quantity: "1",
-        location: formData.location 
+        location: formData.location,
+        cover_image: result.cover_image || ""
       };
       await handlePipelineRouting(newRecordData);
     } else {
