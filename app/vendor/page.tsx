@@ -35,24 +35,23 @@ export default function VendorDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // MAIN FORM (For Insertions & Scanning Only)
-  const [formData, setFormData] = useState(initialFormState);
+  // MAIN DASHBOARD STATES
+  const [formData, setFormData] = useState(initialFormState); // Only used to track Active Location now
   const [barcode, setBarcode] = useState("");
   const [textQuery, setTextQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [autoSave, setAutoSave] = useState(true); 
   const [localSearch, setLocalSearch] = useState("");
 
-  // EDIT MODAL STATE (Completely separated from the main form)
+  // UNIVERSAL MODAL STATES (Handles both Edits and Manual Adds)
   const [editFormData, setEditFormData] = useState(initialFormState);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Loading & UI States
   const [isSearchingDiscogs, setIsSearchingDiscogs] = useState(false);
   const [isSearchingText, setIsSearchingText] = useState(false);
-  const [formSubmitting, setFormSubmitting] = useState(false);
   const [lookupError, setLookupError] = useState("");
   const [showScanner, setShowScanner] = useState(false);
 
@@ -67,27 +66,14 @@ export default function VendorDashboard() {
       .select("id, artist, title, weight_grams, price_cents, quantity, location, year, genres, cover_image")
       .order("id", { ascending: false });
 
-    if (error) {
-      console.error("Error fetching inventory:", error);
-    } else {
-      setInventory(data || []);
-    }
+    if (error) console.error("Error fetching inventory:", error);
+    else setInventory(data || []);
     setLoading(false);
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setEditFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // --- MAIN INSERTION LOGIC (Rapid Scanning) ---
+  // --- CORE DATABASE SAVING LOGIC ---
   const executeSave = async (dataToSave: typeof initialFormState) => {
-    setFormSubmitting(true);
+    setIsUpdating(true);
     setLookupError("");
 
     const payload = {
@@ -130,42 +116,38 @@ export default function VendorDashboard() {
         fetchInventory();
       }
     }
-    setFormSubmitting(false);
-  };
-
-  const handleAddRecord = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await executeSave(formData);
-  };
-
-  // --- DEDICATED EDIT LOGIC ---
-  const handleUpdateRecord = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!itemToEdit) return;
-    
-    setIsUpdating(true);
-    const payload = {
-      title: editFormData.title,
-      artist: editFormData.artist,
-      price_cents: Math.round(parseFloat(editFormData.price) * 100),
-      weight_grams: parseInt(editFormData.weight) || 0,
-      quantity: parseInt(editFormData.quantity) || 1,
-      location: editFormData.location,
-    };
-
-    const { error } = await supabase
-      .from("inventory")
-      .update(payload)
-      .eq("id", itemToEdit.id);
-
     setIsUpdating(false);
+  };
 
-    if (error) {
-      alert("Error updating record: " + error.message);
+  // --- UNIVERSAL MODAL SUBMIT (Handles Updates AND Manual Saves) ---
+  const handleModalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdating(true);
+
+    if (itemToEdit) {
+      // It's an Edit
+      const payload = {
+        title: editFormData.title,
+        artist: editFormData.artist,
+        price_cents: Math.round(parseFloat(editFormData.price) * 100),
+        weight_grams: parseInt(editFormData.weight) || 0,
+        quantity: parseInt(editFormData.quantity) || 1,
+        location: editFormData.location,
+      };
+
+      const { error } = await supabase.from("inventory").update(payload).eq("id", itemToEdit.id);
+      
+      if (error) alert("Error updating record: " + error.message);
+      else {
+        setIsModalOpen(false);
+        setItemToEdit(null);
+        fetchInventory();
+      }
+      setIsUpdating(false);
     } else {
-      setIsEditModalOpen(false);
-      setItemToEdit(null);
-      fetchInventory();
+      // It's a Manual Add or an off-autosave review
+      await executeSave(editFormData);
+      setIsModalOpen(false);
     }
   };
 
@@ -179,10 +161,36 @@ export default function VendorDashboard() {
       quantity: (album.quantity || 1).toString(),
       location: album.location || "",
     });
-    setIsEditModalOpen(true);
+    setIsModalOpen(true);
   }
 
-  // --- SCANNER & API LOGIC ---
+  function openManualAddModal() {
+    setItemToEdit(null);
+    setEditFormData({ ...initialFormState, location: formData.location });
+    setIsModalOpen(true);
+  }
+
+  // --- SCANNER & API PIPELINE ---
+  const handlePipelineRouting = async (newRecordData: typeof initialFormState) => {
+    if (autoSave && newRecordData.location) {
+      // Fast path: Straight to the database
+      await executeSave(newRecordData);
+    } else {
+      // Review path: Send it to the modal
+      setItemToEdit(null);
+      setEditFormData({
+        title: newRecordData.title,
+        artist: newRecordData.artist,
+        price: newRecordData.price || "0",
+        weight: newRecordData.weight || "",
+        quantity: newRecordData.quantity || "1",
+        location: newRecordData.location || formData.location
+      });
+      setIsModalOpen(true);
+      if (!newRecordData.location) setLookupError("Please set a location before saving.");
+    }
+  };
+
   const processBarcodeLookup = async (code: string) => {
     if (!code) return;
     setIsSearchingDiscogs(true);
@@ -195,26 +203,39 @@ export default function VendorDashboard() {
         ...formData,
         artist: result.artist,
         title: result.title,
-        year: result.year || '',
-        genres: result.genres || [],
-        tracklist: result.tracklist || [],
-        coverImage: result.cover_image || '',
-        weight: result.weight || formData.weight
+        price: "0",
+        weight: result.weight || "",
+        quantity: "1",
+        location: formData.location
       };
-
-      setFormData(newRecordData);
-
-      if (autoSave) {
-        if (!newRecordData.location) {
-          setLookupError("Auto-save paused: Please set your Active Vault Location first.");
-        } else {
-          await executeSave(newRecordData);
-        }
-      }
+      await handlePipelineRouting(newRecordData);
     } else {
       setLookupError(result?.error || "Barcode lookup failed.");
     }
     setIsSearchingDiscogs(false);
+  };
+
+  const handleSelectRelease = async (id: number) => {
+    setIsSearchingDiscogs(true);
+    const result = await getDiscogsReleaseDetails(id);
+
+    if (result?.success) {
+      const newRecordData = {
+        ...formData,
+        artist: result.artist,
+        title: result.title,
+        price: "0",
+        weight: result.weight || "",
+        quantity: "1",
+        location: formData.location 
+      };
+      await handlePipelineRouting(newRecordData);
+    } else {
+      alert(result?.error || "Failed to fetch album details.");
+    }
+    
+    setSearchResults([]); 
+    setIsSearchingDiscogs(false); 
   };
 
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
@@ -240,38 +261,6 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  const handleSelectRelease = async (id: number) => {
-    setIsSearchingDiscogs(true);
-    const result = await getDiscogsReleaseDetails(id);
-
-    if (result?.success) {
-      const newRecordData = {
-        ...formData,
-        artist: result.artist,
-        title: result.title,
-        year: result.year || '',
-        genres: result.genres || [],
-        tracklist: result.tracklist || [],
-        coverImage: result.cover_image || '',
-        weight: result.weight || formData.weight 
-      };
-      
-      setFormData(newRecordData);
-
-      if (autoSave && newRecordData.location) {
-        await executeSave(newRecordData);
-      } else if (autoSave && !newRecordData.location) {
-        setLookupError("Auto-save paused: Please set your Active Vault Location first.");
-      }
-
-    } else {
-      alert(result?.error || "Failed to fetch album details.");
-    }
-    
-    setSearchResults([]); 
-    setIsSearchingDiscogs(false); 
-  };
-
   const filteredInventory = inventory.filter((album) => {
     if (!localSearch) return true;
     const searchLower = localSearch.toLowerCase();
@@ -287,6 +276,7 @@ export default function VendorDashboard() {
   return (
     <main className="p-4 sm:p-8 w-full max-w-full overflow-x-hidden mx-auto font-sans relative animate-fade-in pb-20">
       
+      {/* --- HEADER --- */}
       <header className="border-b border-gray-200 pb-5 mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-5 w-full">
         <div className="flex items-center gap-4 w-full md:w-auto min-w-0">
           <div className="w-12 h-12 flex-shrink-0">
@@ -314,11 +304,19 @@ export default function VendorDashboard() {
         </div>
       </header>
 
-      {/* --- MAIN INSERTION STATION --- */}
+      {/* --- STREAMLINED SCANNING STATION --- */}
       <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 w-full max-w-full overflow-hidden mt-8">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 tracking-tight">Add New Stock Insertion</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900 tracking-tight">Rapid Insertion Station</h2>
+          <button 
+            onClick={openManualAddModal}
+            className="text-sm font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition"
+          >
+            ✍️ Add Manually
+          </button>
+        </div>
         
-        <form onSubmit={handleAddRecord} className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end w-full">
+        <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end w-full">
           
           <div className="sm:col-span-2 md:col-span-4 bg-emerald-50 border-2 border-emerald-500 rounded-xl p-5 mb-2 shadow-sm w-full">
             <label className="text-sm font-black text-emerald-900 uppercase tracking-widest flex items-center justify-between mb-2">
@@ -328,13 +326,11 @@ export default function VendorDashboard() {
             <input 
               type="text" 
               name="location" 
-              required 
               value={formData.location} 
-              onChange={handleInputChange} 
+              onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
               className="w-full border border-emerald-300 rounded-lg px-4 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 bg-white placeholder:font-normal placeholder:text-gray-400" 
               placeholder="e.g. Crate 1, Bin A, New Arrivals..." 
             />
-            <p className="text-xs text-emerald-700 mt-2 font-semibold">Set this once. It stays locked while you scan records into this bin.</p>
           </div>
 
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2 w-full min-w-0 overflow-hidden">
@@ -433,49 +429,13 @@ export default function VendorDashboard() {
             )}
           </div>
 
-          <div className="w-full min-w-0">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
-            <input type="text" name="title" required value={formData.title} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Somethin' Else" />
-          </div>
-
-          <div className="w-full min-w-0">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist <span className="text-red-500">*</span></label>
-            <input type="text" name="artist" required value={formData.artist} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="e.g. Cannonball Adderley" />
-          </div>
-
-          <div className="w-full min-w-0">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($) <span className="text-red-500">*</span></label>
-            <input type="number" name="price" step="0.01" required value={formData.price} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="0" />
-          </div>
-
-          <div className="sm:col-span-2 md:col-span-4 grid grid-cols-2 gap-3 w-full items-end">
-            <div className="col-span-1 min-w-0">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
-              <input type="number" name="weight" value={formData.weight} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="180" />
-            </div>
-            <div className="col-span-1 min-w-0">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
-              <input type="number" name="quantity" min="1" value={formData.quantity} onChange={handleInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="1" />
-            </div>
-          </div>
-
           {lookupError && (
             <div className="sm:col-span-2 md:col-span-4 text-sm font-semibold text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100 w-full break-words">
               {lookupError}
             </div>
           )}
 
-          <div className="sm:col-span-2 md:col-span-4 mt-2 w-full flex gap-3">
-            <button 
-              type="submit" 
-              disabled={formSubmitting || isSearchingDiscogs} 
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 flex justify-center items-center gap-2"
-            >
-              {formSubmitting ? 'Writing to Vault...' : 'Save to Inventory'}
-            </button>
-          </div>
-
-        </form>
+        </div>
       </section>
 
       {/* --- INVENTORY LIST --- */}
@@ -556,51 +516,53 @@ export default function VendorDashboard() {
         )}
       </section>
 
-      {/* --- THE NEW EDIT OVERLAY MODAL --- */}
-      {isEditModalOpen && itemToEdit && (
+      {/* --- UNIVERSAL RECORD MODAL (Add & Edit) --- */}
+      {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
             
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-900 text-lg">Edit Inventory Record</h3>
+              <h3 className="font-bold text-gray-900 text-lg">
+                {itemToEdit ? "Edit Inventory Record" : "Review & Add Record"}
+              </h3>
               <button 
-                onClick={() => { setIsEditModalOpen(false); setItemToEdit(null); }}
+                onClick={() => { setIsModalOpen(false); setItemToEdit(null); }}
                 className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
               >✕</button>
             </div>
             
             <div className="p-6 overflow-y-auto">
-              <form id="editForm" onSubmit={handleUpdateRecord} className="flex flex-col gap-4">
+              <form id="recordForm" onSubmit={handleModalSubmit} className="flex flex-col gap-4">
                 
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
-                  <input type="text" name="title" required value={editFormData.title} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  <input type="text" name="title" required value={editFormData.title} onChange={(e) => setEditFormData({...editFormData, title: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist <span className="text-red-500">*</span></label>
-                  <input type="text" name="artist" required value={editFormData.artist} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  <input type="text" name="artist" required value={editFormData.artist} onChange={(e) => setEditFormData({...editFormData, artist: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($) <span className="text-red-500">*</span></label>
-                    <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-                    <input type="text" name="location" value={editFormData.location} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    <input type="text" name="location" value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
-                    <input type="number" name="weight" value={editFormData.weight} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    <input type="number" name="weight" value={editFormData.weight} onChange={(e) => setEditFormData({...editFormData, weight: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
-                    <input type="number" name="quantity" min="1" value={editFormData.quantity} onChange={handleEditInputChange} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    <input type="number" name="quantity" min="1" value={editFormData.quantity} onChange={(e) => setEditFormData({...editFormData, quantity: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
                 </div>
               </form>
@@ -609,18 +571,18 @@ export default function VendorDashboard() {
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
               <button 
                 type="button" 
-                onClick={() => { setIsEditModalOpen(false); setItemToEdit(null); }}
+                onClick={() => { setIsModalOpen(false); setItemToEdit(null); }}
                 className="w-1/3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl py-3.5 text-sm font-bold transition shadow-sm"
               >
-                Cancel Edit
+                Cancel
               </button>
               <button 
                 type="submit" 
-                form="editForm"
+                form="recordForm"
                 disabled={isUpdating} 
                 className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50"
               >
-                {isUpdating ? 'Updating...' : 'Update Inventory'}
+                {isUpdating ? 'Saving...' : (itemToEdit ? 'Update Inventory' : 'Save to Inventory')}
               </button>
             </div>
 
