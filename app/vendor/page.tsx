@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase"; 
-import { searchDiscogsByBarcode, searchDiscogsByText } from "../services/discogsService";
+// ADDED getDiscogsReleaseDetails TO THE IMPORT
+import { searchDiscogsByBarcode, searchDiscogsByText, getDiscogsReleaseDetails } from "../services/discogsService";
 import BarcodeScanner from "../components/BarcodeScanner";
 
 interface InventoryItem {
@@ -30,8 +31,8 @@ const initialFormState = {
 };
 
 export default function VendorDashboard() {
-  // Hardcoded dev session to bypass login and prevent lockout
-  const session = { user: { email: "dev-mode@vault.com" } };
+  // FIXED: Added a dummy UUID so Supabase doesn't throw a null vendor_id error
+  const session = { user: { id: "00000000-0000-0000-0000-000000000000", email: "dev-mode@vault.com" } };
   
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +76,6 @@ export default function VendorDashboard() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // FULLY RESTORED & TYPESCRIPT-SAFE TEXT SEARCH
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!textQuery) return;
@@ -86,7 +86,6 @@ export default function VendorDashboard() {
     try {
       const response = await searchDiscogsByText(textQuery); 
       
-      // Safe check for the response object and nested results array
       if (response && response.success && response.results && response.results.length > 0) {
         setSearchResults(response.results);
       } else {
@@ -101,9 +100,27 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  const handleSelectRelease = (id: string) => {
-    // For now, clear results. We can add full selection logic later if needed!
-    setSearchResults([]);
+  // FIXED: Now actually fetches the deep release details when you click an item!
+  const handleSelectRelease = async (id: number) => {
+    setIsSearchingDiscogs(true); // Disables form while fetching
+    const result = await getDiscogsReleaseDetails(id);
+
+    if (result?.success) {
+      setFormData(prev => ({
+        ...prev,
+        artist: result.artist,
+        title: result.title,
+        year: result.year || '',
+        genres: result.genres || [],
+        tracklist: result.tracklist || [],
+        coverImage: result.cover_image || ''
+      }));
+    } else {
+      alert(result?.error || "Failed to fetch album details.");
+    }
+    
+    setSearchResults([]); // Close dropdown
+    setIsSearchingDiscogs(false); // Re-enable form
   };
 
   const handleAddRecord = async (e: React.FormEvent) => {
@@ -111,7 +128,9 @@ export default function VendorDashboard() {
     setFormSubmitting(true);
     setLookupError("");
 
+    // FIXED: Added vendor_id to the payload
     const payload = {
+      vendor_id: session.user.id, 
       title: formData.title,
       artist: formData.artist,
       price_cents: Math.round(parseFloat(formData.price) * 100),
@@ -134,8 +153,9 @@ export default function VendorDashboard() {
       }
     } else {
       const { error } = await supabase.from("inventory").insert([payload]);
-      if (error) setLookupError(error.message);
-      else {
+      if (error) {
+        setLookupError(error.message);
+      } else {
         setFormData(initialFormState);
         setBarcode("");
         fetchInventory();
