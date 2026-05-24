@@ -328,12 +328,14 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  // FIX: Force TypeScript to recognize this as strictly a string array
   const uniqueLocations = Array.from(new Set(inventory.map(item => item.location || "").filter(Boolean))).sort();
 
-  const filteredInventory = inventory.filter((album) => {
-    const matchesCategory = selectedCategory ? album.location === selectedCategory : true;
-    
+  // --- NEW: TWO-STEP FILTER LOGIC FOR ACCURATE COUNTERS ---
+  const categoryInventory = selectedCategory 
+    ? inventory.filter(item => item.location === selectedCategory) 
+    : inventory;
+
+  const filteredInventory = categoryInventory.filter((album) => {
     const searchLower = localSearch.toLowerCase();
     const matchesSearch = !localSearch || 
       album.title.toLowerCase().includes(searchLower) ||
@@ -341,7 +343,7 @@ export default function VendorDashboard() {
       (album.location && album.location.toLowerCase().includes(searchLower)) ||
       (album.tracklist && Array.isArray(album.tracklist) && album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower)));
 
-    return matchesCategory && matchesSearch;
+    return matchesSearch;
   });
 
   return (
@@ -394,14 +396,23 @@ export default function VendorDashboard() {
               <span className="flex items-center gap-2">📍 Active Vault Location</span>
               <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-1 rounded-md font-bold">REQUIRED FOR BATCH SCAN</span>
             </label>
-            <input 
-              type="text" 
-              name="location" 
-              value={formData.location} 
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
-              className="w-full border border-emerald-300 rounded-lg px-4 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 bg-white placeholder:font-normal placeholder:text-gray-400" 
-              placeholder="e.g. Crate 1, Bin A, New Arrivals..." 
-            />
+            <div className="relative w-full">
+              <input 
+                type="text" 
+                name="location" 
+                value={formData.location} 
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
+                className="w-full border border-emerald-300 rounded-lg pl-4 pr-12 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 bg-white placeholder:font-normal placeholder:text-gray-400" 
+                placeholder="e.g. Crate 1, Bin A, New Arrivals..." 
+              />
+              {formData.location && (
+                <button 
+                  type="button" 
+                  onClick={() => setFormData({ ...formData, location: "" })}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-emerald-600 transition font-bold"
+                >✕</button>
+              )}
+            </div>
           </div>
 
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
@@ -410,15 +421,24 @@ export default function VendorDashboard() {
               <span className="text-emerald-600 font-medium">Powered by Discogs</span>
             </label>
             <div className="flex gap-2 mt-1.5 w-full">
-              <input 
-                type="text" 
-                placeholder={!formData.location ? "Set location first..." : "Type UPC barcode here and press Enter..."} 
-                value={barcode} 
-                disabled={!formData.location || isSearchingDiscogs}
-                onChange={(e) => setBarcode(e.target.value)} 
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
-                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
-              />
+              <div className="relative flex-1 min-w-0">
+                <input 
+                  type="text" 
+                  placeholder={!formData.location ? "Set location first..." : "Type UPC barcode here and press Enter..."} 
+                  value={barcode} 
+                  disabled={!formData.location || isSearchingDiscogs}
+                  onChange={(e) => setBarcode(e.target.value)} 
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
+                  className="w-full border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
+                />
+                {barcode && (
+                  <button 
+                    type="button" 
+                    onClick={() => setBarcode("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xs"
+                  >✕</button>
+                )}
+              </div>
               <button 
                 type="button"
                 onClick={() => setShowScanner(true)}
@@ -449,15 +469,24 @@ export default function VendorDashboard() {
               <span className="text-emerald-600 font-medium">Fast Manual Search</span>
             </label>
             <div className="flex gap-2 mt-1.5 w-full">
-              <input 
-                type="text" 
-                placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152 and press Enter..."} 
-                value={catalog} 
-                disabled={!formData.location || isSearchingDiscogs}
-                onChange={(e) => setCatalog(e.target.value)} 
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
-                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
-              />
+              <div className="relative flex-1 min-w-0">
+                <input 
+                  type="text" 
+                  placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152 and press Enter..."} 
+                  value={catalog} 
+                  disabled={!formData.location || isSearchingDiscogs}
+                  onChange={(e) => setCatalog(e.target.value)} 
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
+                  className="w-full border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
+                />
+                {catalog && (
+                  <button 
+                    type="button" 
+                    onClick={() => setCatalog("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xs"
+                  >✕</button>
+                )}
+              </div>
               <button 
                 type="button" 
                 onClick={() => handleCatalogLookup(catalog)}
@@ -475,15 +504,24 @@ export default function VendorDashboard() {
               <span className="text-emerald-600 font-medium">Top 10 Matches</span>
             </label>
             <div className="flex gap-2 mt-1.5 w-full">
-              <input 
-                type="text" 
-                placeholder={!formData.location ? "Set location first..." : "e.g. Pink Floyd Dark Side"} 
-                value={textQuery} 
-                disabled={!formData.location || isSearchingText}
-                onChange={(e) => setTextQuery(e.target.value)} 
-                onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
-                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
-              />
+              <div className="relative flex-1 min-w-0">
+                <input 
+                  type="text" 
+                  placeholder={!formData.location ? "Set location first..." : "e.g. Pink Floyd Dark Side"} 
+                  value={textQuery} 
+                  disabled={!formData.location || isSearchingText}
+                  onChange={(e) => setTextQuery(e.target.value)} 
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
+                  className="w-full border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
+                />
+                {textQuery && (
+                  <button 
+                    type="button" 
+                    onClick={() => setTextQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xs"
+                  >✕</button>
+                )}
+              </div>
               <button 
                 type="button" 
                 onClick={handleTextSearch}
@@ -559,7 +597,8 @@ export default function VendorDashboard() {
         <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h2 className="text-lg font-bold text-gray-900 tracking-tight">Items List</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Showing {filteredInventory.length} of {inventory.length} total records</p>
+            {/* FIX: Dynamic Total Counter based on selected category */}
+            <p className="text-xs text-gray-500 mt-0.5">Showing {filteredInventory.length} of {categoryInventory.length} total records</p>
           </div>
           
           <div className="w-full sm:w-64 relative">
@@ -569,8 +608,15 @@ export default function VendorDashboard() {
               placeholder="Search local vault..." 
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
             />
+            {localSearch && (
+              <button 
+                type="button" 
+                onClick={() => setLocalSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xs"
+              >✕</button>
+            )}
           </div>
         </div>
         
@@ -738,12 +784,22 @@ export default function VendorDashboard() {
                 
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
-                  <input type="text" name="title" required value={editFormData.title} onChange={(e) => setEditFormData({...editFormData, title: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  <div className="relative w-full">
+                    <input type="text" name="title" required value={editFormData.title} onChange={(e) => setEditFormData({...editFormData, title: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    {editFormData.title && (
+                      <button type="button" onClick={() => setEditFormData({...editFormData, title: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
+                    )}
+                  </div>
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist <span className="text-red-500">*</span></label>
-                  <input type="text" name="artist" required value={editFormData.artist} onChange={(e) => setEditFormData({...editFormData, artist: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  <div className="relative w-full">
+                    <input type="text" name="artist" required value={editFormData.artist} onChange={(e) => setEditFormData({...editFormData, artist: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    {editFormData.artist && (
+                      <button type="button" onClick={() => setEditFormData({...editFormData, artist: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -770,7 +826,12 @@ export default function VendorDashboard() {
 
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-                  <input type="text" name="location" value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  <div className="relative w-full">
+                    <input type="text" name="location" value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    {editFormData.location && (
+                      <button type="button" onClick={() => setEditFormData({...editFormData, location: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
+                    )}
+                  </div>
                 </div>
               </form>
             </div>
