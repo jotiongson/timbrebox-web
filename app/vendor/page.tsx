@@ -328,7 +328,8 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  const uniqueLocations = Array.from(new Set(inventory.map(item => item.location).filter(Boolean))).sort();
+  // FIX: Force TypeScript to recognize this as strictly a string array
+  const uniqueLocations = Array.from(new Set(inventory.map(item => item.location || "").filter(Boolean))).sort();
 
   const filteredInventory = inventory.filter((album) => {
     const matchesCategory = selectedCategory ? album.location === selectedCategory : true;
