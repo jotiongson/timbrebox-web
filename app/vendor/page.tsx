@@ -44,11 +44,12 @@ export default function VendorDashboard() {
   // MAIN DASHBOARD STATES
   const [formData, setFormData] = useState(initialFormState); 
   const [barcode, setBarcode] = useState("");
-  const [catalog, setCatalog] = useState(""); // NEW: Catalog State
+  const [catalog, setCatalog] = useState(""); 
   const [textQuery, setTextQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [autoSave, setAutoSave] = useState(true); 
   const [localSearch, setLocalSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // MODAL STATES 
   const [editFormData, setEditFormData] = useState(initialFormState);
@@ -248,7 +249,6 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false);
   };
 
-  // --- NEW: CATALOG NUMBER LOOKUP ---
   const handleCatalogLookup = async (catno: string) => {
     if (!catno) return;
     setIsSearchingDiscogs(true);
@@ -328,22 +328,19 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
+  const uniqueLocations = Array.from(new Set(inventory.map(item => item.location).filter(Boolean))).sort();
+
   const filteredInventory = inventory.filter((album) => {
-    if (!localSearch) return true;
-    const searchLower = localSearch.toLowerCase();
+    const matchesCategory = selectedCategory ? album.location === selectedCategory : true;
     
-    const matchesBasic = (
+    const searchLower = localSearch.toLowerCase();
+    const matchesSearch = !localSearch || 
       album.title.toLowerCase().includes(searchLower) ||
       album.artist.toLowerCase().includes(searchLower) ||
       (album.location && album.location.toLowerCase().includes(searchLower)) ||
-      (album.weight_grams && album.weight_grams.toString() === searchLower)
-    );
+      (album.tracklist && Array.isArray(album.tracklist) && album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower)));
 
-    const matchesTrack = album.tracklist && Array.isArray(album.tracklist) 
-      ? album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower))
-      : false;
-
-    return matchesBasic || matchesTrack;
+    return matchesCategory && matchesSearch;
   });
 
   return (
@@ -406,48 +403,45 @@ export default function VendorDashboard() {
             />
           </div>
 
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2 w-full min-w-0 overflow-hidden">
-            <div className="flex-1 w-full min-w-0">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-                <span>Barcode Lookup</span>
-                <span className="text-emerald-600 font-medium">Powered by Discogs</span>
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+              <span>Barcode Lookup</span>
+              <span className="text-emerald-600 font-medium">Powered by Discogs</span>
+            </label>
+            <div className="flex gap-2 mt-1.5 w-full">
+              <input 
+                type="text" 
+                placeholder={!formData.location ? "Set location first..." : "Type UPC barcode here and press Enter..."} 
+                value={barcode} 
+                disabled={!formData.location || isSearchingDiscogs}
+                onChange={(e) => setBarcode(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
+              />
+              <button 
+                type="button"
+                onClick={() => setShowScanner(true)}
+                disabled={!formData.location || isSearchingDiscogs}
+                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
+              >
+                {isSearchingDiscogs ? '⏳ ...' : '📷 Scan'}
+              </button>
+            </div>
+            
+            <div className="mt-3 flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                id="autoSaveToggle"
+                checked={autoSave}
+                onChange={(e) => setAutoSave(e.target.checked)}
+                className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
+              />
+              <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
               </label>
-              <div className="flex gap-2 mt-1.5 w-full">
-                <input 
-                  type="text" 
-                  placeholder="Type UPC barcode here and press Enter..." 
-                  value={barcode} 
-                  disabled={isSearchingDiscogs}
-                  onChange={(e) => setBarcode(e.target.value)} 
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
-                  className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
-                />
-                <button 
-                  type="button"
-                  onClick={() => setShowScanner(true)}
-                  disabled={isSearchingDiscogs}
-                  className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-w-[100px]"
-                >
-                  {isSearchingDiscogs ? '⏳ ...' : '📷 Scan'}
-                </button>
-              </div>
-              
-              <div className="mt-3 flex items-center gap-2">
-                <input 
-                  type="checkbox" 
-                  id="autoSaveToggle"
-                  checked={autoSave}
-                  onChange={(e) => setAutoSave(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
-                />
-                <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
-                  Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
-                </label>
-              </div>
             </div>
           </div>
 
-          {/* --- CATALOG NUMBER LOOKUP --- */}
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Catalog Number Lookup</span>
@@ -456,25 +450,24 @@ export default function VendorDashboard() {
             <div className="flex gap-2 mt-1.5 w-full">
               <input 
                 type="text" 
-                placeholder="e.g. FC 37152 and press Enter..." 
+                placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152 and press Enter..."} 
                 value={catalog} 
-                disabled={isSearchingDiscogs}
+                disabled={!formData.location || isSearchingDiscogs}
                 onChange={(e) => setCatalog(e.target.value)} 
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
-                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
               />
               <button 
                 type="button" 
                 onClick={() => handleCatalogLookup(catalog)}
-                disabled={isSearchingDiscogs || !catalog}
-                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 sm:px-6 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-w-[100px]"
+                disabled={!formData.location || isSearchingDiscogs || !catalog}
+                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 sm:px-6 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
               >
                 {isSearchingDiscogs ? '⏳ ...' : 'Search'}
               </button>
             </div>
           </div>
 
-          {/* --- TEXT SEARCH --- */}
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Text Search</span>
@@ -483,17 +476,18 @@ export default function VendorDashboard() {
             <div className="flex gap-2 mt-1.5 w-full">
               <input 
                 type="text" 
-                placeholder="e.g. Pink Floyd Dark Side" 
+                placeholder={!formData.location ? "Set location first..." : "e.g. Pink Floyd Dark Side"} 
                 value={textQuery} 
+                disabled={!formData.location || isSearchingText}
                 onChange={(e) => setTextQuery(e.target.value)} 
                 onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
-                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
               />
               <button 
                 type="button" 
                 onClick={handleTextSearch}
-                disabled={isSearchingText || !textQuery}
-                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 sm:px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50"
+                disabled={!formData.location || isSearchingText || !textQuery}
+                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 sm:px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSearchingText ? '...' : 'Search'}
               </button>
@@ -530,6 +524,31 @@ export default function VendorDashboard() {
             </div>
           )}
 
+        </div>
+      </section>
+
+      {/* --- DYNAMIC CATEGORY FILTER BAR --- */}
+      <section className="mb-6">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          <button 
+            onClick={() => setSelectedCategory(null)}
+            className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition ${
+              !selectedCategory ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            All Items
+          </button>
+          {uniqueLocations.map(loc => (
+            <button 
+              key={loc}
+              onClick={() => setSelectedCategory(loc === selectedCategory ? null : loc)}
+              className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition ${
+                selectedCategory === loc ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {loc}
+            </button>
+          ))}
         </div>
       </section>
 
