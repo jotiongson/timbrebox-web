@@ -11,12 +11,14 @@ interface InventoryItem {
   title: string;
   weight_grams: number;
   price_cents: number;
+  market_price_cents?: number; 
   status?: string;
   quantity?: number;
   location?: string;
   year?: string;
   genres?: string[];
   tracklist?: any[];
+  identifiers?: any[];
   cover_image?: string;
 }
 
@@ -24,10 +26,13 @@ const initialFormState = {
   title: "",
   artist: "",
   price: "0", 
+  market_price: "", 
   weight: "",
   quantity: "1",
   location: "",
   cover_image: "", 
+  tracklist: [] as any[],
+  identifiers: [] as any[]
 };
 
 export default function VendorDashboard() {
@@ -44,11 +49,14 @@ export default function VendorDashboard() {
   const [autoSave, setAutoSave] = useState(true); 
   const [localSearch, setLocalSearch] = useState("");
 
-  // UNIVERSAL MODAL STATES 
+  // MODAL STATES 
   const [editFormData, setEditFormData] = useState(initialFormState);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // NEW: Details View State
+  const [viewItem, setViewItem] = useState<InventoryItem | null>(null);
 
   // Loading & UI States
   const [isSearchingDiscogs, setIsSearchingDiscogs] = useState(false);
@@ -64,7 +72,7 @@ export default function VendorDashboard() {
     setLoading(true);
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, artist, title, weight_grams, price_cents, quantity, location, year, genres, cover_image")
+      .select("id, artist, title, weight_grams, price_cents, market_price_cents, quantity, location, year, genres, tracklist, identifiers, cover_image")
       .order("id", { ascending: false });
 
     if (error) console.error("Error fetching inventory:", error);
@@ -72,7 +80,7 @@ export default function VendorDashboard() {
     setLoading(false);
   }
 
-  // --- CORE DATABASE SAVING LOGIC ---
+  // --- CORE DATABASE SAVING LOGIC (SILENT AUTO-SAVE) ---
   const executeSave = async (dataToSave: typeof initialFormState) => {
     setIsUpdating(true);
     setLookupError("");
@@ -81,14 +89,16 @@ export default function VendorDashboard() {
       vendor_id: session.user.id, 
       title: dataToSave.title,
       artist: dataToSave.artist,
-      price_cents: Math.round(parseFloat(dataToSave.price) * 100),
+      price_cents: Math.round(parseFloat(dataToSave.price || "0") * 100),
+      market_price_cents: Math.round(parseFloat(dataToSave.market_price || "0") * 100), 
       weight_grams: parseInt(dataToSave.weight) || 0,
       quantity: parseInt(dataToSave.quantity) || 1,
       location: dataToSave.location,
       cover_image: dataToSave.cover_image, 
+      tracklist: dataToSave.tracklist,
+      identifiers: dataToSave.identifiers
     };
 
-    // OVERRIDE LOGIC FOR SCANS
     const { data: existingMatches } = await supabase
       .from("inventory")
       .select("id")
@@ -100,7 +110,13 @@ export default function VendorDashboard() {
     if (existingMatches && existingMatches.length > 0) {
       const { error } = await supabase
         .from("inventory")
-        .update({ location: payload.location, cover_image: payload.cover_image }) 
+        .update({ 
+          location: payload.location, 
+          cover_image: payload.cover_image,
+          market_price_cents: payload.market_price_cents,
+          tracklist: payload.tracklist,
+          identifiers: payload.identifiers
+        }) 
         .eq("id", existingMatches[0].id);
 
       if (error) setLookupError(error.message);
@@ -121,7 +137,6 @@ export default function VendorDashboard() {
     setIsUpdating(false);
   };
 
-  // --- UNIVERSAL MODAL SUBMIT ---
   const handleModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUpdating(true);
@@ -130,7 +145,8 @@ export default function VendorDashboard() {
       const payload = {
         title: editFormData.title,
         artist: editFormData.artist,
-        price_cents: Math.round(parseFloat(editFormData.price) * 100),
+        price_cents: Math.round(parseFloat(editFormData.price || "0") * 100),
+        market_price_cents: Math.round(parseFloat(editFormData.market_price || "0") * 100),
         weight_grams: parseInt(editFormData.weight) || 0,
         quantity: parseInt(editFormData.quantity) || 1,
         location: editFormData.location,
@@ -152,7 +168,6 @@ export default function VendorDashboard() {
     }
   };
 
-  // --- DELETION LOGIC ---
   const handleDeleteRecord = async (id: number) => {
     const confirmDelete = window.confirm("Are you sure you want to permanently delete this record from your vault?");
     if (!confirmDelete) return;
@@ -160,26 +175,29 @@ export default function VendorDashboard() {
     setIsUpdating(true);
     const { error } = await supabase.from("inventory").delete().eq("id", id);
     
-    if (error) {
-      alert("Error deleting record: " + error.message);
-    } else {
+    if (error) alert("Error deleting record: " + error.message);
+    else {
       setIsModalOpen(false);
       setItemToEdit(null);
-      fetchInventory(); // Refresh the list after deleting
+      fetchInventory(); 
     }
     setIsUpdating(false);
   };
 
-  function openEditModal(album: InventoryItem) {
+  function openEditModal(e: React.MouseEvent, album: InventoryItem) {
+    e.stopPropagation(); // Prevents the row click from opening the Details View
     setItemToEdit(album);
     setEditFormData({
       title: album.title,
       artist: album.artist,
       price: (album.price_cents / 100).toFixed(2),
+      market_price: album.market_price_cents ? (album.market_price_cents / 100).toFixed(2) : "",
       weight: album.weight_grams.toString(),
       quantity: (album.quantity || 1).toString(),
       location: album.location || "",
       cover_image: album.cover_image || "", 
+      tracklist: album.tracklist || [],
+      identifiers: album.identifiers || []
     });
     setIsModalOpen(true);
   }
@@ -190,23 +208,14 @@ export default function VendorDashboard() {
     setIsModalOpen(true);
   }
 
-  // --- SCANNER & API PIPELINE ---
   const handlePipelineRouting = async (newRecordData: typeof initialFormState) => {
     if (autoSave && newRecordData.location) {
       await executeSave(newRecordData);
     } else {
       setItemToEdit(null);
-      setEditFormData({
-        title: newRecordData.title,
-        artist: newRecordData.artist,
-        price: newRecordData.price || "0",
-        weight: newRecordData.weight || "",
-        quantity: newRecordData.quantity || "1",
-        location: newRecordData.location || formData.location,
-        cover_image: newRecordData.cover_image 
-      });
+      setEditFormData(newRecordData);
       setIsModalOpen(true);
-      if (!newRecordData.location) setLookupError("Please set a location before saving.");
+      if (!newRecordData.location) setLookupError("Auto-save paused: Please set a location first.");
     }
   };
 
@@ -223,10 +232,13 @@ export default function VendorDashboard() {
         artist: result.artist,
         title: result.title,
         price: "0",
+        market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
         weight: result.weight || "",
         quantity: "1",
         location: formData.location,
-        cover_image: result.cover_image || "" 
+        cover_image: result.cover_image || "",
+        tracklist: result.tracklist || [],
+        identifiers: result.identifiers || []
       };
       await handlePipelineRouting(newRecordData);
     } else {
@@ -245,10 +257,13 @@ export default function VendorDashboard() {
         artist: result.artist,
         title: result.title,
         price: "0",
+        market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
         weight: result.weight || "",
         quantity: "1",
-        location: formData.location,
-        cover_image: result.cover_image || ""
+        location: formData.location, 
+        cover_image: result.cover_image || "",
+        tracklist: result.tracklist || [],
+        identifiers: result.identifiers || []
       };
       await handlePipelineRouting(newRecordData);
     } else {
@@ -354,44 +369,43 @@ export default function VendorDashboard() {
             />
           </div>
 
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2 w-full min-w-0 overflow-hidden">
-            <div className="flex-1 w-full min-w-0">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-                <span>Barcode Lookup</span>
-                <span className="text-emerald-600 font-medium">Powered by Discogs</span>
-              </label>
-              <div className="flex gap-2 mt-1.5 w-full">
-                <input 
-                  type="text" 
-                  placeholder="Type UPC barcode here..." 
-                  value={barcode} 
-                  onChange={(e) => setBarcode(e.target.value)} 
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
-                  className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-                />
-                <button 
-                  type="button"
-                  onClick={() => setShowScanner(true)}
-                  className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center gap-2 shadow-sm"
-                >
-                  📷 Scan
-                </button>
-              </div>
-              
-              <div className="mt-3 flex items-center gap-2">
-                <input 
-                  type="checkbox" 
-                  id="autoSaveToggle"
-                  checked={autoSave}
-                  onChange={(e) => setAutoSave(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
-                />
-                <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
-                  Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
-                </label>
-              </div>
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+              <span>Barcode Lookup</span>
+              <span className="text-emerald-600 font-medium">Powered by Discogs</span>
+            </label>
+            <div className="flex gap-2 mt-1.5 w-full">
+              <input 
+                type="text" 
+                placeholder="Type UPC barcode here and press Enter..." 
+                value={barcode} 
+                disabled={isSearchingDiscogs}
+                onChange={(e) => setBarcode(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
+              />
+              <button 
+                type="button"
+                onClick={() => setShowScanner(true)}
+                disabled={isSearchingDiscogs}
+                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-w-[100px]"
+              >
+                {isSearchingDiscogs ? '⏳ ...' : '📷 Scan'}
+              </button>
             </div>
-
+            
+            <div className="mt-3 flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                id="autoSaveToggle"
+                checked={autoSave}
+                onChange={(e) => setAutoSave(e.target.checked)}
+                className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
+              />
+              <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
+              </label>
+            </div>
           </div>
 
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
@@ -482,8 +496,11 @@ export default function VendorDashboard() {
         ) : (
           <div className="divide-y divide-gray-100 flex flex-col w-full">
             {filteredInventory.map((album) => (
-              <div key={album.id} className="p-3 sm:p-4 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group">
-                
+              <div 
+                key={album.id} 
+                onClick={() => setViewItem(album)} // Opens the Details View
+                className="p-3 sm:p-4 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group cursor-pointer"
+              >
                 {album.cover_image ? (
                   <img src={album.cover_image} alt="cover" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded shadow-sm flex-shrink-0" />
                 ) : (
@@ -512,12 +529,18 @@ export default function VendorDashboard() {
                     )}
                     <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">{album.weight_grams}g</span>
                     <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">x{album.quantity || 1}</span>
+                    
+                    {album.market_price_cents && album.market_price_cents > 0 && (
+                      <span className="inline-block bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
+                        Market: ${(album.market_price_cents / 100).toFixed(2)}
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex-shrink-0 pl-2">
                    <button 
-                     onClick={() => openEditModal(album)} 
+                     onClick={(e) => openEditModal(e, album)} 
                      className="text-gray-400 hover:text-emerald-600 bg-gray-50 hover:bg-emerald-100 border border-gray-200 rounded p-2 transition focus:outline-none focus:ring-2 focus:ring-emerald-500"
                      aria-label="Edit item"
                    >
@@ -529,6 +552,87 @@ export default function VendorDashboard() {
           </div>
         )}
       </section>
+
+      {/* --- NEW: DETAILS VIEW MODAL --- */}
+      {viewItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
+            
+            <div className="p-5 border-b border-gray-100 flex justify-between items-start bg-gray-50">
+              <div className="flex gap-4 items-center">
+                {viewItem.cover_image ? (
+                  <img src={viewItem.cover_image} alt="cover" className="w-16 h-16 object-cover rounded shadow-sm" />
+                ) : (
+                  <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center text-2xl">💿</div>
+                )}
+                <div>
+                  <h3 className="font-bold text-gray-900 text-xl leading-tight">{viewItem.title}</h3>
+                  <p className="text-sm text-gray-500 font-medium">{viewItem.artist}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setViewItem(null)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
+              >✕</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex flex-col gap-6">
+              
+              {/* Value & Location Header */}
+              <div className="flex gap-4">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex-1">
+                  <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Your Price</p>
+                  <p className="text-2xl font-black text-emerald-600">${(viewItem.price_cents / 100).toFixed(2)}</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex-1">
+                  <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Market Est.</p>
+                  <p className="text-2xl font-black text-blue-600">
+                    {viewItem.market_price_cents ? `$${(viewItem.market_price_cents / 100).toFixed(2)}` : 'N/A'}
+                  </p>
+                </div>
+                <div className="bg-gray-100 border border-gray-200 rounded-xl p-4 flex-1 flex flex-col justify-center items-center">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Location</p>
+                  <p className="text-lg font-bold text-gray-900">{viewItem.location || 'Unassigned'}</p>
+                </div>
+              </div>
+
+              {/* Identifiers (The Matrix/Runout) */}
+              {viewItem.identifiers && viewItem.identifiers.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
+                  <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    {viewItem.identifiers.map((id: any, i: number) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="font-bold min-w-[100px]">{id.type}:</span>
+                        <span className="font-mono text-xs bg-white px-1 border border-gray-100 rounded">{id.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Tracklist */}
+              {viewItem.tracklist && viewItem.tracklist.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Tracklist</h4>
+                  <div className="bg-gray-50 rounded-lg border border-gray-200 p-1">
+                    {viewItem.tracklist.map((track: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center p-2 border-b border-gray-100 last:border-b-0 hover:bg-gray-100 transition">
+                        <div className="flex gap-3">
+                          <span className="text-xs font-bold text-gray-400 w-4">{track.position || i+1}</span>
+                          <span className="text-sm font-semibold text-gray-800">{track.title}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">{track.duration}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- UNIVERSAL RECORD MODAL (Add & Edit) --- */}
       {isModalOpen && (
@@ -560,12 +664,12 @@ export default function VendorDashboard() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Price ($) <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Your Price ($) <span className="text-red-500">*</span></label>
                     <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-                    <input type="text" name="location" value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    <label className="text-xs font-bold text-emerald-600 uppercase tracking-wider pl-1">Discogs Lowest ($)</label>
+                    <input type="number" name="market_price" readOnly value={editFormData.market_price} className="w-full mt-1.5 border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="N/A" />
                   </div>
                 </div>
 
@@ -579,10 +683,14 @@ export default function VendorDashboard() {
                     <input type="number" name="quantity" min="1" value={editFormData.quantity} onChange={(e) => setEditFormData({...editFormData, quantity: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
+                  <input type="text" name="location" value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                </div>
               </form>
             </div>
 
-            {/* --- MODAL FOOTER WITH NEW DELETE BUTTON --- */}
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-2 sm:gap-3">
               {itemToEdit && (
                 <button 
@@ -590,8 +698,6 @@ export default function VendorDashboard() {
                   onClick={() => handleDeleteRecord(itemToEdit.id)}
                   disabled={isUpdating}
                   className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl px-4 py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 flex items-center justify-center"
-                  aria-label="Delete record"
-                  title="Permanently Delete Record"
                 >
                   🗑️
                 </button>
