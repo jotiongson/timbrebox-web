@@ -55,7 +55,7 @@ export default function VendorDashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   
-  // NEW: Details View State
+  // Details View State
   const [viewItem, setViewItem] = useState<InventoryItem | null>(null);
 
   // Loading & UI States
@@ -185,7 +185,7 @@ export default function VendorDashboard() {
   };
 
   function openEditModal(e: React.MouseEvent, album: InventoryItem) {
-    e.stopPropagation(); // Prevents the row click from opening the Details View
+    e.stopPropagation(); 
     setItemToEdit(album);
     setEditFormData({
       title: album.title,
@@ -297,16 +297,25 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
+  // --- THE UPGRADED VAULT SEARCH ENGINE ---
   const filteredInventory = inventory.filter((album) => {
     if (!localSearch) return true;
     const searchLower = localSearch.toLowerCase();
     
-    return (
+    // Check standard fields
+    const matchesBasic = (
       album.title.toLowerCase().includes(searchLower) ||
       album.artist.toLowerCase().includes(searchLower) ||
       (album.location && album.location.toLowerCase().includes(searchLower)) ||
       (album.weight_grams && album.weight_grams.toString() === searchLower)
     );
+
+    // Deep Search: Look inside the tracklist array!
+    const matchesTrack = album.tracklist && Array.isArray(album.tracklist) 
+      ? album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower))
+      : false;
+
+    return matchesBasic || matchesTrack;
   });
 
   return (
@@ -498,7 +507,7 @@ export default function VendorDashboard() {
             {filteredInventory.map((album) => (
               <div 
                 key={album.id} 
-                onClick={() => setViewItem(album)} // Opens the Details View
+                onClick={() => setViewItem(album)} 
                 className="p-3 sm:p-4 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group cursor-pointer"
               >
                 {album.cover_image ? (
@@ -553,7 +562,7 @@ export default function VendorDashboard() {
         )}
       </section>
 
-      {/* --- NEW: DETAILS VIEW MODAL --- */}
+      {/* --- DETAILS VIEW MODAL --- */}
       {viewItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
@@ -578,7 +587,6 @@ export default function VendorDashboard() {
             
             <div className="p-6 overflow-y-auto flex flex-col gap-6">
               
-              {/* Value & Location Header */}
               <div className="flex gap-4">
                 <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex-1">
                   <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Your Price</p>
@@ -596,7 +604,6 @@ export default function VendorDashboard() {
                 </div>
               </div>
 
-              {/* Identifiers (The Matrix/Runout) */}
               {viewItem.identifiers && viewItem.identifiers.length > 0 && (
                 <div>
                   <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
@@ -611,7 +618,6 @@ export default function VendorDashboard() {
                 </div>
               )}
 
-              {/* Tracklist */}
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div>
                   <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Tracklist</h4>
