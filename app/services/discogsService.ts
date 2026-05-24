@@ -1,8 +1,5 @@
 "use server";
 
-// The "use server" directive ensures this code ONLY runs on your secure backend.
-// It will never leak your API token to the browser.
-
 export async function searchDiscogsByBarcode(barcode: string) {
   const token = process.env.DISCOGS_PAT;
 
@@ -11,58 +8,45 @@ export async function searchDiscogsByBarcode(barcode: string) {
     return { error: "Server configuration error." };
   }
 
-  console.log(`[Discogs] Scanning barcode: ${barcode}...`);
-
-  // STEP 1: The Shallow Search (Find the Release ID)
   const searchUrl = `https://api.discogs.com/database/search?barcode=${barcode}&token=${token}`;
 
   try {
     const searchResponse = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'TimbreBoxApp/1.0 +https://timbrebox-web.vercel.app'
-      }
+      headers: { 'User-Agent': 'TimbreBoxApp/1.0 +https://timbrebox-web.vercel.app' }
     });
 
-    if (!searchResponse.ok) {
-      throw new Error(`Discogs Search API responded with status: ${searchResponse.status}`);
-    }
+    if (!searchResponse.ok) throw new Error(`Discogs Search API responded with status: ${searchResponse.status}`);
 
     const searchData = await searchResponse.json();
 
     if (searchData.results && searchData.results.length > 0) {
-      // Grab the top match
       const bestMatch = searchData.results[0];
       const releaseId = bestMatch.id;
 
-      // Discogs usually formats titles as "Artist Name - Album Title"
       const titleParts = bestMatch.title.split(' - ');
       const artist = titleParts[0]?.trim() || 'Unknown Artist';
       const title = titleParts[1]?.trim() || bestMatch.title;
 
-      console.log(`[Discogs] Match found: ${artist} - ${title} (ID: ${releaseId})`);
-
-      // STEP 2: The Deep Fetch (Get the Tracks, Videos, and Weight)
       const releaseUrl = `https://api.discogs.com/releases/${releaseId}?token=${token}`;
       const releaseResponse = await fetch(releaseUrl, {
-        headers: {
-          'User-Agent': 'TimbreBoxApp/1.0 +https://timbrebox-web.vercel.app'
-        }
+        headers: { 'User-Agent': 'TimbreBoxApp/1.0 +https://timbrebox-web.vercel.app' }
       });
 
       let tracklist = [];
-      let videos = [];
+      let identifiers = [];
       let genres = bestMatch.genre || [];
       let year = bestMatch.year || null;
       let extractedWeight = '';
+      let marketPrice = null; 
 
       if (releaseResponse.ok) {
         const releaseData = await releaseResponse.json();
         tracklist = releaseData.tracklist || [];
-        videos = releaseData.videos || [];
+        identifiers = releaseData.identifiers || []; // NEW: Grabbing Identifiers
         year = releaseData.year || year;
         genres = releaseData.genres || genres;
+        marketPrice = releaseData.lowest_price || null; 
         
-        // --- THE WEIGHT HUNTER ---
         if (releaseData.formats && releaseData.formats.length > 0) {
           const descriptions = releaseData.formats[0].descriptions || [];
           const weightTag = descriptions.find((d: string) => d.toLowerCase().includes('gram') || d.toLowerCase().match(/\d+g/));
@@ -71,14 +55,8 @@ export async function searchDiscogsByBarcode(barcode: string) {
             if (numMatch) extractedWeight = numMatch[0];
           }
         }
-        // -------------------------
-        
-        console.log(`[Discogs] Deep fetch successful: Found ${tracklist.length} tracks and ${videos.length} videos.`);
-      } else {
-        console.warn(`[Discogs] Deep fetch failed for ID ${releaseId}, returning shallow data.`);
       }
 
-      // Return the expanded payload to the frontend
       return {
         success: true,
         artist: artist,
@@ -87,13 +65,12 @@ export async function searchDiscogsByBarcode(barcode: string) {
         genres: genres,
         cover_image: bestMatch.cover_image || null,
         tracklist: tracklist,
-        videos: videos,
-        weight: extractedWeight
+        identifiers: identifiers, // Passed to frontend
+        weight: extractedWeight,
+        market_price: marketPrice 
       };
     }
-
     return { error: "No records found for this barcode." };
-
   } catch (error: any) {
     console.error("[Discogs] API Error:", error.message);
     return { error: "Failed to communicate with Discogs API." };
@@ -104,7 +81,6 @@ export async function searchDiscogsByText(query: string) {
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
 
-  // type=release and format=vinyl ensures we only get physical records, no CDs or cassettes
   const searchUrl = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&format=vinyl&per_page=10&token=${token}`;
 
   try {
@@ -137,23 +113,18 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
     
     const data = await response.json();
     
-    // Grab the first artist and strip out Discogs' database numbering (e.g., "Cannonball Adderley (2)")
     const rawArtist = data.artists && data.artists.length > 0 ? data.artists[0].name : 'Unknown Artist';
     const cleanArtist = rawArtist.replace(/\s\(\d+\)$/, '');
     
-    // --- THE WEIGHT HUNTER ---
     let extractedWeight = '';
     if (data.formats && data.formats.length > 0) {
       const descriptions = data.formats[0].descriptions || [];
-      // Look for any tag containing "gram" or "g" attached to a number
       const weightTag = descriptions.find((d: string) => d.toLowerCase().includes('gram') || d.toLowerCase().match(/\d+g/));
       if (weightTag) {
-        // Pull just the numbers out of the string (e.g., "180 Gram" -> "180")
         const numMatch = weightTag.match(/\d+/);
         if (numMatch) extractedWeight = numMatch[0];
       }
     }
-    // -------------------------
     
     return {
       success: true,
@@ -163,8 +134,9 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
       genres: data.genres || [],
       cover_image: data.images && data.images.length > 0 ? data.images[0].uri : null,
       tracklist: data.tracklist || [],
-      videos: data.videos || [],
-      weight: extractedWeight // We now return the extracted weight!
+      identifiers: data.identifiers || [], // NEW: Grabbing Identifiers
+      weight: extractedWeight,
+      market_price: data.lowest_price || null 
     };
   } catch (error: any) {
     console.error("[Discogs] Release Details Error:", error.message);
