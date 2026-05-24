@@ -143,3 +143,29 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
     return { error: "Failed to fetch release details." };
   }
 }
+
+export async function searchDiscogsByCatalogNumber(catno: string) {
+  const token = process.env.DISCOGS_PAT;
+  if (!token) return { error: "Server configuration error." };
+
+  // type=release ensures we only get cataloged releases
+  const searchUrl = `https://api.discogs.com/database/search?catno=${encodeURIComponent(catno)}&type=release&token=${token}`;
+
+  try {
+    const response = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'TimbreBoxApp/1.0 +https://timbrebox-web.vercel.app' }
+    });
+    
+    if (!response.ok) throw new Error(`Status: ${response.status}`);
+    
+    const data = await response.json();
+    if (data.results && data.results.length > 0) {
+      // Just like the barcode search, we grab the best match and fetch full details
+      return await getDiscogsReleaseDetails(data.results[0].id);
+    }
+    return { error: "No records found for that catalog number." };
+  } catch (error: any) {
+    console.error("[Discogs] Catalog Search Error:", error.message);
+    return { error: "Failed to search Discogs API." };
+  }
+}
