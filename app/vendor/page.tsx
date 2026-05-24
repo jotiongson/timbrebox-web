@@ -41,7 +41,6 @@ export default function VendorDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // MAIN DASHBOARD STATES
   const [formData, setFormData] = useState(initialFormState); 
   const [barcode, setBarcode] = useState("");
   const [catalog, setCatalog] = useState(""); 
@@ -51,16 +50,13 @@ export default function VendorDashboard() {
   const [localSearch, setLocalSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // MODAL STATES 
   const [editFormData, setEditFormData] = useState(initialFormState);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   
-  // Details View State
   const [viewItem, setViewItem] = useState<InventoryItem | null>(null);
 
-  // Loading & UI States
   const [isSearchingDiscogs, setIsSearchingDiscogs] = useState(false);
   const [isSearchingText, setIsSearchingText] = useState(false);
   const [lookupError, setLookupError] = useState("");
@@ -82,7 +78,6 @@ export default function VendorDashboard() {
     setLoading(false);
   }
 
-  // --- CORE DATABASE SAVING LOGIC (SILENT AUTO-SAVE) ---
   const executeSave = async (dataToSave: typeof initialFormState) => {
     setIsUpdating(true);
     setLookupError("");
@@ -278,25 +273,56 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false);
   };
 
+  // --- NEW: REMATCH LOGIC ---
+  const handleRematchRelease = async (item: InventoryItem) => {
+    setViewItem(null);
+    setTextQuery(`${item.artist} ${item.title}`);
+    setIsSearchingText(true);
+    try {
+      const response = await searchDiscogsByText(`${item.artist} ${item.title}`);
+      if (response && response.success && response.results) {
+        setSearchResults(response.results);
+      }
+    } catch (err) {
+      setLookupError("Failed to re-match.");
+    }
+    setIsSearchingText(false);
+  };
+
   const handleSelectRelease = async (id: number) => {
     setIsSearchingDiscogs(true);
     const result = await getDiscogsReleaseDetails(id);
 
     if (result?.success) {
-      const newRecordData = {
-        ...formData,
-        artist: result.artist,
-        title: result.title,
-        price: "0",
-        market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
-        weight: result.weight || "",
-        quantity: "1",
-        location: formData.location, 
-        cover_image: result.cover_image || "",
-        tracklist: result.tracklist || [],
-        identifiers: result.identifiers || []
-      };
-      await handlePipelineRouting(newRecordData);
+      if (viewItem) {
+        // UPDATE EXISTING RECORD
+        const { error } = await supabase.from("inventory").update({
+          title: result.title,
+          artist: result.artist,
+          cover_image: result.cover_image,
+          tracklist: result.tracklist,
+          identifiers: result.identifiers,
+          market_price_cents: result.market_price ? Math.round(parseFloat(result.market_price) * 100) : 0
+        }).eq("id", viewItem.id);
+        
+        if (!error) fetchInventory();
+      } else {
+        // ADD NEW RECORD
+        const newRecordData = {
+          ...formData,
+          artist: result.artist,
+          title: result.title,
+          price: "0",
+          market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
+          weight: result.weight || "",
+          quantity: "1",
+          location: formData.location,
+          cover_image: result.cover_image || "",
+          tracklist: result.tracklist || [],
+          identifiers: result.identifiers || []
+        };
+        await handlePipelineRouting(newRecordData);
+      }
     } else {
       alert(result?.error || "Failed to fetch album details.");
     }
@@ -330,7 +356,6 @@ export default function VendorDashboard() {
 
   const uniqueLocations = Array.from(new Set(inventory.map(item => item.location || "").filter(Boolean))).sort();
 
-  // --- NEW: TWO-STEP FILTER LOGIC FOR ACCURATE COUNTERS ---
   const categoryInventory = selectedCategory 
     ? inventory.filter(item => item.location === selectedCategory) 
     : inventory;
@@ -352,13 +377,9 @@ export default function VendorDashboard() {
       {/* --- HEADER --- */}
       <header className="border-b border-gray-200 pb-5 mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-5 w-full">
         <div className="flex items-center gap-4 w-full md:w-auto min-w-0">
-<div className="w-12 h-12 flex-shrink-0">
-  <img 
-    src="/icons/icon-512x512.png" 
-    alt="TimbreBox Logo" 
-    className="w-full h-full object-contain rounded-lg shadow-sm"
-  />
-</div>
+          <div className="w-12 h-12 flex-shrink-0">
+            <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-full h-full object-contain rounded-lg shadow-sm" />
+          </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">TimbreBox</h1>
             <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Vault Unlocked • {session.user.email}</p>
@@ -592,7 +613,6 @@ export default function VendorDashboard() {
         <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h2 className="text-lg font-bold text-gray-900 tracking-tight">Items List</h2>
-            {/* FIX: Dynamic Total Counter based on selected category */}
             <p className="text-xs text-gray-500 mt-0.5">Showing {filteredInventory.length} of {categoryInventory.length} total records</p>
           </div>
           
@@ -707,6 +727,15 @@ export default function VendorDashboard() {
             <div className="p-6 overflow-y-auto flex flex-col gap-6">
               
               <div className="flex gap-4">
+                <button 
+                  onClick={() => handleRematchRelease(viewItem)}
+                  className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition"
+                >
+                  🔄 Re-match Release
+                </button>
+              </div>
+
+              <div className="flex gap-4">
                 <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex-1">
                   <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Your Price</p>
                   <p className="text-2xl font-black text-emerald-600">${(viewItem.price_cents / 100).toFixed(2)}</p>
@@ -723,7 +752,19 @@ export default function VendorDashboard() {
                 </div>
               </div>
 
-
+              {viewItem.identifiers && viewItem.identifiers.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
+                  <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    {viewItem.identifiers.map((id: any, i: number) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="font-bold min-w-[100px]">{id.type}:</span>
+                        <span className="font-mono text-xs bg-white px-1 border border-gray-100 rounded">{id.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div>
@@ -739,21 +780,6 @@ export default function VendorDashboard() {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-
-                            {viewItem.identifiers && viewItem.identifiers.length > 0 && (
-                <div>
-                  <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
-                  <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    {viewItem.identifiers.map((id: any, i: number) => (
-                      <li key={i} className="flex gap-2">
-                        <span className="font-bold min-w-[100px]">{id.type}:</span>
-                        <span className="font-mono text-xs bg-white px-1 border border-gray-100 rounded">{id.value}</span>
-                      </li>
-                    ))}
-                  </ul>
                 </div>
               )}
 
