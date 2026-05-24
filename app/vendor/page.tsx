@@ -352,18 +352,13 @@ export default function VendorDashboard() {
       {/* --- HEADER --- */}
       <header className="border-b border-gray-200 pb-5 mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-5 w-full">
         <div className="flex items-center gap-4 w-full md:w-auto min-w-0">
-          <div className="w-12 h-12 flex-shrink-0">
-            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-sm">
-              <ellipse cx="50" cy="28" rx="24" ry="12" fill="#1F2937" />
-              <ellipse cx="50" cy="28" rx="8" ry="4" fill="#059669" />
-              <ellipse cx="50" cy="28" rx="2" ry="1" fill="#D1D5DB" />
-              <path d="M15 42 L50 60 L50 92 L15 74 Z" fill="#1F2937" />
-              <path d="M85 42 L50 60 L50 92 L85 74 Z" fill="#374151" />
-              <path d="M15 42 L50 24 L85 42 L50 60 Z" fill="none" stroke="#059669" strokeWidth="5" strokeLinejoin="round" />
-              <path d="M25 50 L25 80 M35 55 L35 85" stroke="#374151" strokeWidth="2" strokeLinecap="round" />
-              <path d="M75 50 L75 80 M65 55 L65 85" stroke="#1F2937" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </div>
+<div className="w-12 h-12 flex-shrink-0">
+  <img 
+    src="/icons/icon-512x512.png" 
+    alt="TimbreBox Logo" 
+    className="w-full h-full object-contain rounded-lg shadow-sm"
+  />
+</div>
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">TimbreBox</h1>
             <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Vault Unlocked • {session.user.email}</p>
