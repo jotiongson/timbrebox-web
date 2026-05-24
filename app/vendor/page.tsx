@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase"; 
-import { searchDiscogsByBarcode, searchDiscogsByText, getDiscogsReleaseDetails } from "../services/discogsService";
+import { searchDiscogsByBarcode, searchDiscogsByCatalogNumber, searchDiscogsByText, getDiscogsReleaseDetails } from "../services/discogsService";
 import BarcodeScanner from "../components/BarcodeScanner";
 
 interface InventoryItem {
@@ -44,6 +44,7 @@ export default function VendorDashboard() {
   // MAIN DASHBOARD STATES
   const [formData, setFormData] = useState(initialFormState); 
   const [barcode, setBarcode] = useState("");
+  const [catalog, setCatalog] = useState(""); // NEW: Catalog State
   const [textQuery, setTextQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [autoSave, setAutoSave] = useState(true); 
@@ -247,6 +248,36 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false);
   };
 
+  // --- NEW: CATALOG NUMBER LOOKUP ---
+  const handleCatalogLookup = async (catno: string) => {
+    if (!catno) return;
+    setIsSearchingDiscogs(true);
+    setLookupError("");
+    
+    const result = await searchDiscogsByCatalogNumber(catno);
+    
+    if (result?.success) {
+      const newRecordData = {
+        ...formData,
+        artist: result.artist,
+        title: result.title,
+        price: "0",
+        market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
+        weight: result.weight || "",
+        quantity: "1",
+        location: formData.location,
+        cover_image: result.cover_image || "",
+        tracklist: result.tracklist || [],
+        identifiers: result.identifiers || []
+      };
+      await handlePipelineRouting(newRecordData);
+      setCatalog(""); 
+    } else {
+      setLookupError(result?.error || "Catalog lookup failed.");
+    }
+    setIsSearchingDiscogs(false);
+  };
+
   const handleSelectRelease = async (id: number) => {
     setIsSearchingDiscogs(true);
     const result = await getDiscogsReleaseDetails(id);
@@ -297,12 +328,10 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  // --- THE UPGRADED VAULT SEARCH ENGINE ---
   const filteredInventory = inventory.filter((album) => {
     if (!localSearch) return true;
     const searchLower = localSearch.toLowerCase();
     
-    // Check standard fields
     const matchesBasic = (
       album.title.toLowerCase().includes(searchLower) ||
       album.artist.toLowerCase().includes(searchLower) ||
@@ -310,7 +339,6 @@ export default function VendorDashboard() {
       (album.weight_grams && album.weight_grams.toString() === searchLower)
     );
 
-    // Deep Search: Look inside the tracklist array!
     const matchesTrack = album.tracklist && Array.isArray(album.tracklist) 
       ? album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower))
       : false;
@@ -378,45 +406,75 @@ export default function VendorDashboard() {
             />
           </div>
 
+          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row gap-3 items-end mb-2 w-full min-w-0 overflow-hidden">
+            <div className="flex-1 w-full min-w-0">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+                <span>Barcode Lookup</span>
+                <span className="text-emerald-600 font-medium">Powered by Discogs</span>
+              </label>
+              <div className="flex gap-2 mt-1.5 w-full">
+                <input 
+                  type="text" 
+                  placeholder="Type UPC barcode here and press Enter..." 
+                  value={barcode} 
+                  disabled={isSearchingDiscogs}
+                  onChange={(e) => setBarcode(e.target.value)} 
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
+                  className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowScanner(true)}
+                  disabled={isSearchingDiscogs}
+                  className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-w-[100px]"
+                >
+                  {isSearchingDiscogs ? '⏳ ...' : '📷 Scan'}
+                </button>
+              </div>
+              
+              <div className="mt-3 flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="autoSaveToggle"
+                  checked={autoSave}
+                  onChange={(e) => setAutoSave(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
+                />
+                <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                  Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* --- CATALOG NUMBER LOOKUP --- */}
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-              <span>Barcode Lookup</span>
-              <span className="text-emerald-600 font-medium">Powered by Discogs</span>
+              <span>Catalog Number Lookup</span>
+              <span className="text-emerald-600 font-medium">Fast Manual Search</span>
             </label>
             <div className="flex gap-2 mt-1.5 w-full">
               <input 
                 type="text" 
-                placeholder="Type UPC barcode here and press Enter..." 
-                value={barcode} 
+                placeholder="e.g. FC 37152 and press Enter..." 
+                value={catalog} 
                 disabled={isSearchingDiscogs}
-                onChange={(e) => setBarcode(e.target.value)} 
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
+                onChange={(e) => setCatalog(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
                 className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
               />
               <button 
-                type="button"
-                onClick={() => setShowScanner(true)}
-                disabled={isSearchingDiscogs}
-                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-w-[100px]"
+                type="button" 
+                onClick={() => handleCatalogLookup(catalog)}
+                disabled={isSearchingDiscogs || !catalog}
+                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 sm:px-6 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-w-[100px]"
               >
-                {isSearchingDiscogs ? '⏳ ...' : '📷 Scan'}
+                {isSearchingDiscogs ? '⏳ ...' : 'Search'}
               </button>
-            </div>
-            
-            <div className="mt-3 flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                id="autoSaveToggle"
-                checked={autoSave}
-                onChange={(e) => setAutoSave(e.target.checked)}
-                className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
-              />
-              <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
-                Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
-              </label>
             </div>
           </div>
 
+          {/* --- TEXT SEARCH --- */}
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Text Search</span>
