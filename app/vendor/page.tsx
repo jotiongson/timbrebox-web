@@ -289,11 +289,24 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
+  // --- UPDATED SMART WEIGHT SELECTOR ---
   const handleSelectRelease = async (id: number) => {
     setIsSearchingDiscogs(true);
     const result = await getDiscogsReleaseDetails(id);
 
     if (result?.success) {
+      // Look inside the format description text for strings like "180g" or "200g"
+      const descriptionsString = result.formats?.[0]?.descriptions?.join(" ") || "";
+      let detectedWeight = 120; // Default fallback
+
+      if (descriptionsString.includes("200g")) {
+        detectedWeight = 200;
+      } else if (descriptionsString.includes("180g")) {
+        detectedWeight = 180;
+      } else if (result.weight) {
+        detectedWeight = parseInt(result.weight);
+      }
+
       if (viewItem) {
         // OVERRIDE RECORD: Updates everything EXCEPT TimbreBox price
         const { error } = await supabase.from("inventory").update({
@@ -303,7 +316,7 @@ export default function VendorDashboard() {
           tracklist: result.tracklist,
           identifiers: result.identifiers,
           market_price_cents: result.market_price ? Math.round(parseFloat(result.market_price) * 100) : 0,
-          weight_grams: result.weight ? parseInt(result.weight) : 120
+          weight_grams: detectedWeight
         }).eq("id", viewItem.id);
         
         if (!error) fetchInventory();
@@ -315,7 +328,7 @@ export default function VendorDashboard() {
           title: result.title,
           price: "0",
           market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
-          weight: result.weight || "120",
+          weight: detectedWeight.toString(),
           quantity: "1",
           location: formData.location,
           cover_image: result.cover_image || "",
@@ -355,7 +368,7 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  const uniqueLocations = Array.from(new Set(inventory.map(item => item.location || "").filter(Boolean))).sort();
+const uniqueLocations = Array.from(new Set(inventory.map(item => item.location || "").filter(Boolean))).sort();
 
   const categoryInventory = selectedCategory 
     ? inventory.filter(item => item.location === selectedCategory) 
@@ -518,6 +531,7 @@ export default function VendorDashboard() {
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Text Search</span>
+              {/* --- UPDATED LABEL: Top 20 Matches --- */}
               <span className="text-emerald-600 font-medium">Top 20 Matches</span>
             </label>
             <div className="flex gap-2 mt-1.5 w-full">
@@ -564,7 +578,7 @@ export default function VendorDashboard() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
-                      {/* UPDATED UI: Year • Market Price • Weight */}
+                      {/* --- UPDATED UI: Show Year, Market Price, and Weight --- */}
                       <p className="text-xs text-gray-500 mt-0.5 truncate">
                         {res.year || 'Unknown Year'} • {res.lowest_price || res.price ? `$${res.lowest_price || res.price}` : 'Market: N/A'} • {res.weight ? res.weight + 'g' : '120g'}
                       </p>
@@ -678,7 +692,7 @@ export default function VendorDashboard() {
                        </span>
                     )}
                     <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">{album.weight_grams}g</span>
-                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
+                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">x{album.quantity || 1}</span>
                     
                     {album.market_price_cents && album.market_price_cents > 0 && (
                       <span className="inline-block bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
@@ -754,6 +768,7 @@ export default function VendorDashboard() {
                 </div>
               </div>
 
+              {/* --- SWAPPED ORDER: Tracklist FIRST --- */}
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div>
                   <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Tracklist</h4>
@@ -771,6 +786,7 @@ export default function VendorDashboard() {
                 </div>
               )}
 
+              {/* --- Identifiers SECOND --- */}
               {viewItem.identifiers && viewItem.identifiers.length > 0 && (
                 <div>
                   <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
@@ -784,7 +800,7 @@ export default function VendorDashboard() {
                   </ul>
                 </div>
               )}
-              
+
             </div>
           </div>
         </div>
