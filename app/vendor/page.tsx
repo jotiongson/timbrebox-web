@@ -27,7 +27,7 @@ const initialFormState = {
   artist: "",
   price: "0", 
   market_price: "", 
-  weight: "",
+  weight: "120", // Defaulting to 120g
   quantity: "1",
   location: "",
   cover_image: "", 
@@ -88,7 +88,7 @@ export default function VendorDashboard() {
       artist: dataToSave.artist,
       price_cents: Math.round(parseFloat(dataToSave.price || "0") * 100),
       market_price_cents: Math.round(parseFloat(dataToSave.market_price || "0") * 100), 
-      weight_grams: parseInt(dataToSave.weight) || 0,
+      weight_grams: parseInt(dataToSave.weight) || 120, // Default to 120 if empty
       quantity: parseInt(dataToSave.quantity) || 1,
       location: dataToSave.location,
       cover_image: dataToSave.cover_image, 
@@ -112,7 +112,8 @@ export default function VendorDashboard() {
           cover_image: payload.cover_image,
           market_price_cents: payload.market_price_cents,
           tracklist: payload.tracklist,
-          identifiers: payload.identifiers
+          identifiers: payload.identifiers,
+          weight_grams: payload.weight_grams
         }) 
         .eq("id", existingMatches[0].id);
 
@@ -144,7 +145,7 @@ export default function VendorDashboard() {
         artist: editFormData.artist,
         price_cents: Math.round(parseFloat(editFormData.price || "0") * 100),
         market_price_cents: Math.round(parseFloat(editFormData.market_price || "0") * 100),
-        weight_grams: parseInt(editFormData.weight) || 0,
+        weight_grams: parseInt(editFormData.weight) || 120,
         quantity: parseInt(editFormData.quantity) || 1,
         location: editFormData.location,
         cover_image: editFormData.cover_image,
@@ -230,7 +231,7 @@ export default function VendorDashboard() {
         title: result.title,
         price: "0",
         market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
-        weight: result.weight || "",
+        weight: result.weight || "120", // Default to 120
         quantity: "1",
         location: formData.location,
         cover_image: result.cover_image || "",
@@ -258,7 +259,7 @@ export default function VendorDashboard() {
         title: result.title,
         price: "0",
         market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
-        weight: result.weight || "",
+        weight: result.weight || "120", // Default to 120
         quantity: "1",
         location: formData.location,
         cover_image: result.cover_image || "",
@@ -273,7 +274,6 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false);
   };
 
-  // --- NEW: REMATCH LOGIC ---
   const handleRematchRelease = async (item: InventoryItem) => {
     setViewItem(null);
     setTextQuery(`${item.artist} ${item.title}`);
@@ -295,14 +295,15 @@ export default function VendorDashboard() {
 
     if (result?.success) {
       if (viewItem) {
-        // UPDATE EXISTING RECORD
+        // OVERRIDE RECORD: Updates everything EXCEPT TimbreBox price
         const { error } = await supabase.from("inventory").update({
           title: result.title,
           artist: result.artist,
           cover_image: result.cover_image,
           tracklist: result.tracklist,
           identifiers: result.identifiers,
-          market_price_cents: result.market_price ? Math.round(parseFloat(result.market_price) * 100) : 0
+          market_price_cents: result.market_price ? Math.round(parseFloat(result.market_price) * 100) : 0,
+          weight_grams: result.weight ? parseInt(result.weight) : 120
         }).eq("id", viewItem.id);
         
         if (!error) fetchInventory();
@@ -314,7 +315,7 @@ export default function VendorDashboard() {
           title: result.title,
           price: "0",
           market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
-          weight: result.weight || "",
+          weight: result.weight || "120",
           quantity: "1",
           location: formData.location,
           cover_image: result.cover_image || "",
@@ -517,7 +518,7 @@ export default function VendorDashboard() {
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Text Search</span>
-              <span className="text-emerald-600 font-medium">Top 10 Matches</span>
+              <span className="text-emerald-600 font-medium">Top 20 Matches</span>
             </label>
             <div className="flex gap-2 mt-1.5 w-full">
               <div className="relative flex-1 min-w-0">
@@ -563,8 +564,9 @@ export default function VendorDashboard() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
+                      {/* UPDATED UI: Year • Market Price • Weight */}
                       <p className="text-xs text-gray-500 mt-0.5 truncate">
-                        {res.year || 'Unknown Year'} • {res.country || 'Unknown Region'} • {res.format?.slice(0, 2).join(', ') || 'Vinyl'}
+                        {res.year || 'Unknown Year'} • {res.lowest_price || res.price ? `$${res.lowest_price || res.price}` : 'Market: N/A'} • {res.weight ? res.weight + 'g' : '120g'}
                       </p>
                     </div>
                   </div>
@@ -752,7 +754,19 @@ export default function VendorDashboard() {
                 </div>
               </div>
 
-
+              {viewItem.identifiers && viewItem.identifiers.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
+                  <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    {viewItem.identifiers.map((id: any, i: number) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="font-bold min-w-[100px]">{id.type}:</span>
+                        <span className="font-mono text-xs bg-white px-1 border border-gray-100 rounded">{id.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div>
@@ -771,20 +785,6 @@ export default function VendorDashboard() {
                 </div>
               )}
 
-              {viewItem.identifiers && viewItem.identifiers.length > 0 && (
-                <div>
-                  <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
-                  <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    {viewItem.identifiers.map((id: any, i: number) => (
-                      <li key={i} className="flex gap-2">
-                        <span className="font-bold min-w-[100px]">{id.type}:</span>
-                        <span className="font-mono text-xs bg-white px-1 border border-gray-100 rounded">{id.value}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
             </div>
           </div>
         </div>
