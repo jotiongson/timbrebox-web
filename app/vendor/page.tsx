@@ -754,20 +754,6 @@ export default function VendorDashboard() {
                 </div>
               </div>
 
-              {viewItem.identifiers && viewItem.identifiers.length > 0 && (
-                <div>
-                  <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
-                  <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    {viewItem.identifiers.map((id: any, i: number) => (
-                      <li key={i} className="flex gap-2">
-                        <span className="font-bold min-w-[100px]">{id.type}:</span>
-                        <span className="font-mono text-xs bg-white px-1 border border-gray-100 rounded">{id.value}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div>
                   <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Tracklist</h4>
@@ -785,6 +771,20 @@ export default function VendorDashboard() {
                 </div>
               )}
 
+              {viewItem.identifiers && viewItem.identifiers.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
+                  <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    {viewItem.identifiers.map((id: any, i: number) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="font-bold min-w-[100px]">{id.type}:</span>
+                        <span className="font-mono text-xs bg-white px-1 border border-gray-100 rounded">{id.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
             </div>
           </div>
         </div>
