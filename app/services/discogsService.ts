@@ -8,7 +8,8 @@ export async function searchDiscogsByBarcode(barcode: string) {
     return { error: "Server configuration error." };
   }
 
-  const searchUrl = `https://api.discogs.com/database/search?barcode=${barcode}&token=${token}`;
+  // Use type=release to ensure we hit a physical item that has a price
+  const searchUrl = `https://api.discogs.com/database/search?barcode=${barcode}&type=release&token=${token}`;
 
   try {
     const searchResponse = await fetch(searchUrl, {
@@ -20,6 +21,7 @@ export async function searchDiscogsByBarcode(barcode: string) {
     const searchData = await searchResponse.json();
 
     if (searchData.results && searchData.results.length > 0) {
+      // Get the best match that is explicitly a release
       const bestMatch = searchData.results[0];
       const releaseId = bestMatch.id;
 
@@ -42,11 +44,14 @@ export async function searchDiscogsByBarcode(barcode: string) {
       if (releaseResponse.ok) {
         const releaseData = await releaseResponse.json();
         tracklist = releaseData.tracklist || [];
-        identifiers = releaseData.identifiers || []; // NEW: Grabbing Identifiers
+        identifiers = releaseData.identifiers || [];
         year = releaseData.year || year;
         genres = releaseData.genres || genres;
+        
+        // Grab lowest price if available
         marketPrice = releaseData.lowest_price || null; 
         
+        // Improved Weight Extraction Logic
         if (releaseData.formats && releaseData.formats.length > 0) {
           const descriptions = releaseData.formats[0].descriptions || [];
           const weightTag = descriptions.find((d: string) => d.toLowerCase().includes('gram') || d.toLowerCase().match(/\d+g/));
@@ -65,7 +70,7 @@ export async function searchDiscogsByBarcode(barcode: string) {
         genres: genres,
         cover_image: bestMatch.cover_image || null,
         tracklist: tracklist,
-        identifiers: identifiers, // Passed to frontend
+        identifiers: identifiers,
         weight: extractedWeight,
         market_price: marketPrice 
       };
@@ -81,7 +86,8 @@ export async function searchDiscogsByText(query: string) {
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
 
-  const searchUrl = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&format=vinyl&per_page=10&token=${token}`;
+  // Explicitly require vinyl releases to avoid Master entries that lack pricing
+  const searchUrl = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&format=vinyl&per_page=20&token=${token}`;
 
   try {
     const response = await fetch(searchUrl, {
@@ -91,7 +97,17 @@ export async function searchDiscogsByText(query: string) {
     if (!response.ok) throw new Error(`Status: ${response.status}`);
     
     const data = await response.json();
-    return { success: true, results: data.results || [] };
+    
+    // Attempt to pass back standard lowest_price from the search results if available
+    const mappedResults = (data.results || []).map((res: any) => {
+       // Search results sometimes include 'price' as an approximation
+       return {
+         ...res,
+         lowest_price: res.lowest_price || null 
+       }
+    });
+
+    return { success: true, results: mappedResults };
   } catch (error: any) {
     console.error("[Discogs] Text Search Error:", error.message);
     return { error: "Failed to search Discogs API." };
@@ -117,8 +133,12 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
     const cleanArtist = rawArtist.replace(/\s\(\d+\)$/, '');
     
     let extractedWeight = '';
-    if (data.formats && data.formats.length > 0) {
-      const descriptions = data.formats[0].descriptions || [];
+    
+    // We pass the full formats array back to the frontend so the page.tsx parsing logic works!
+    let formats = data.formats || [];
+
+    if (formats.length > 0) {
+      const descriptions = formats[0].descriptions || [];
       const weightTag = descriptions.find((d: string) => d.toLowerCase().includes('gram') || d.toLowerCase().match(/\d+g/));
       if (weightTag) {
         const numMatch = weightTag.match(/\d+/);
@@ -134,7 +154,8 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
       genres: data.genres || [],
       cover_image: data.images && data.images.length > 0 ? data.images[0].uri : null,
       tracklist: data.tracklist || [],
-      identifiers: data.identifiers || [], // NEW: Grabbing Identifiers
+      identifiers: data.identifiers || [], 
+      formats: formats, // Required for page.tsx logic
       weight: extractedWeight,
       market_price: data.lowest_price || null 
     };
@@ -148,7 +169,7 @@ export async function searchDiscogsByCatalogNumber(catno: string) {
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
 
-  // type=release ensures we only get cataloged releases
+  // type=release ensures we only get physical items with pricing
   const searchUrl = `https://api.discogs.com/database/search?catno=${encodeURIComponent(catno)}&type=release&token=${token}`;
 
   try {
@@ -160,7 +181,6 @@ export async function searchDiscogsByCatalogNumber(catno: string) {
     
     const data = await response.json();
     if (data.results && data.results.length > 0) {
-      // Just like the barcode search, we grab the best match and fetch full details
       return await getDiscogsReleaseDetails(data.results[0].id);
     }
     return { error: "No records found for that catalog number." };
