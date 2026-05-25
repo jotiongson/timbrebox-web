@@ -678,7 +678,7 @@ export default function VendorDashboard() {
                        </span>
                     )}
                     <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">{album.weight_grams}g</span>
-                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">x{album.quantity || 1}</span>
+                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
                     
                     {album.market_price_cents && album.market_price_cents > 0 && (
                       <span className="inline-block bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
