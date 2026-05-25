@@ -565,26 +565,34 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
 
             {searchResults.length > 0 && (
               <div className="mt-3 border border-gray-200 rounded-lg bg-white shadow-sm max-h-64 overflow-y-auto w-full">
-                {searchResults.map((res: any) => (
-                  <div 
-                    key={res.id} 
-                    onClick={() => handleSelectRelease(res.id)}
-                    className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
-                  >
-                    {res.thumb ? (
-                      <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded shadow-sm flex-shrink-0" />
-                    ) : (
-                      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
-                      {/* --- UPDATED UI: Show Year, Market Price, and Weight --- */}
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">
-                        {res.year || 'Unknown Year'} • {res.lowest_price || res.price ? `$${res.lowest_price || res.price}` : 'Market: N/A'} • {res.weight ? res.weight + 'g' : '120g'}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+
+{searchResults.map((res: any) => (
+  <div 
+    key={res.id} 
+    onClick={() => handleSelectRelease(res.id)}
+    className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
+  >
+    {res.thumb ? (
+      <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded shadow-sm flex-shrink-0" />
+    ) : (
+      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
+    )}
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
+      
+      {/* --- NEW UI: Year • Country --- */}
+      <p className="text-xs text-gray-500 mt-0.5 truncate">
+        {res.year || 'Unknown Year'} • {res.country || 'Unknown Region'}
+      </p>
+      
+      {/* --- NEW UI: Label (Catalog Number) --- */}
+      <p className="text-xs text-gray-400 truncate mt-0.5">
+        {res.label?.[0] || 'Unknown Label'} {res.catno ? `(${res.catno})` : ''}
+      </p>
+    </div>
+  </div>
+))}
+                
               </div>
             )}
           </div>
