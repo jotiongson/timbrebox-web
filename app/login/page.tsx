@@ -101,6 +101,18 @@ export default function LoginPage() {
           >
             {isSignUp ? 'Already have an account? Sign In' : 'Need a vault? Create an Account'}
           </button>
+
+          {/* --- ADD THIS NEW BLOCK BELOW YOUR TOGGLE BUTTON --- */}
+          <div className="mt-8 pt-6 border-t border-gray-100">
+            <a 
+              href="/" 
+              className="inline-block bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-6 rounded-full text-sm transition shadow-sm"
+            >
+              🎯 Scan Guest Radar
+            </a>
+          </div>
+          {/* ------------------------------------------------ */}
+          
         </div>
       </div>
     </div>
