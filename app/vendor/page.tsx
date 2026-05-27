@@ -432,6 +432,13 @@ export default function VendorDashboard() {
   return (
     <main className="p-4 sm:p-8 w-full max-w-full overflow-x-hidden mx-auto font-sans relative animate-fade-in pb-20">
       
+      {/* --- HIDDEN DATALIST FOR LOCATION AUTOCOMPLETE --- */}
+      <datalist id="location-options">
+        {uniqueLocations.map(loc => (
+          <option key={loc} value={loc} />
+        ))}
+      </datalist>
+
       {/* --- HEADER --- */}
       <header className="border-b border-gray-200 pb-5 mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-5 w-full">
         <div className="flex items-center gap-4 w-full md:w-auto min-w-0">
@@ -471,9 +478,10 @@ export default function VendorDashboard() {
               <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-1 rounded-md font-bold">REQUIRED FOR BATCH SCAN</span>
             </label>
             <div className="relative w-full">
-              <input 
+            <input 
                 type="text" 
                 name="location" 
+                list="location-options"
                 value={formData.location} 
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
                 className="w-full border border-emerald-300 rounded-lg pl-4 pr-12 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 bg-white placeholder:font-normal placeholder:text-gray-400" 
@@ -904,12 +912,19 @@ export default function VendorDashboard() {
             <div className="p-6 overflow-y-auto">
               <form id="recordForm" onSubmit={handleModalSubmit} className="flex flex-col gap-4">
                 
-                <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
+            <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
                   <div className="relative w-full">
-                    <input type="text" name="title" required value={editFormData.title} onChange={(e) => setEditFormData({...editFormData, title: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
-                    {editFormData.title && (
-                      <button type="button" onClick={() => setEditFormData({...editFormData, title: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
+                    <input 
+                      type="text" 
+                      name="location" 
+                      list="location-options" 
+                      value={editFormData.location} 
+                      onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} 
+                      className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                    />
+                    {editFormData.location && (
+                      <button type="button" onClick={() => setEditFormData({...editFormData, location: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
                     )}
                   </div>
                 </div>
