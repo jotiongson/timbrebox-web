@@ -51,7 +51,7 @@ export default function VendorDashboard() {
   const [localSearch, setLocalSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
-  // NEW STATES
+  // States for Sorting, Voice, and OCR
   const [sortBy, setSortBy] = useState<'date' | 'artist'>('date');
   const [showCatalogScanner, setShowCatalogScanner] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -347,7 +347,6 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false); 
   };
 
-  // --- NEW VOICE SEARCH LOGIC ---
   const startVoiceSearch = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
@@ -358,7 +357,7 @@ export default function VendorDashboard() {
 
     const recognition = new SpeechRecognition();
     recognition.continuous = false; 
-    recognition.interimResults = true; // Gives that "live respelling" feel
+    recognition.interimResults = true; 
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -412,12 +411,11 @@ export default function VendorDashboard() {
     ? inventory.filter(item => item.location === selectedCategory) 
     : inventory;
 
-  // --- NEW SORTING LOGIC APPLIED TO FILTERED LIST ---
   const sortedInventory = [...categoryInventory].sort((a, b) => {
     if (sortBy === 'artist') {
       return a.artist.localeCompare(b.artist);
     }
-    return b.id - a.id; // Default Date Descending
+    return b.id - a.id; 
   });
 
   const filteredInventory = sortedInventory.filter((album) => {
@@ -478,7 +476,7 @@ export default function VendorDashboard() {
               <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-1 rounded-md font-bold">REQUIRED FOR BATCH SCAN</span>
             </label>
             <div className="relative w-full">
-            <input 
+              <input 
                 type="text" 
                 name="location" 
                 list="location-options"
@@ -487,13 +485,6 @@ export default function VendorDashboard() {
                 className="w-full border border-emerald-300 rounded-lg pl-4 pr-12 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 bg-white placeholder:font-normal placeholder:text-gray-400" 
                 placeholder="e.g. Crate 1, Bin A, New Arrivals..." 
               />
-              {formData.location && (
-                <button 
-                  type="button" 
-                  onClick={() => setFormData({ ...formData, location: "" })}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-emerald-600 transition font-bold"
-                >✕</button>
-              )}
             </div>
           </div>
 
@@ -857,7 +848,6 @@ export default function VendorDashboard() {
                 </div>
               </div>
 
-              {/* Tracklist above Identifiers */}
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div>
                   <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Tracklist</h4>
@@ -912,8 +902,6 @@ export default function VendorDashboard() {
             <div className="p-6 overflow-y-auto">
               <form id="recordForm" onSubmit={handleModalSubmit} className="flex flex-col gap-4">
                 
-                
-                {/* --- RESTORED TITLE FIELD --- */}
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
                   <div className="relative w-full">
@@ -959,24 +947,19 @@ export default function VendorDashboard() {
                 {/* --- DYNAMIC LOCATION COMBOBOX --- */}
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-                  <div className="relative w-full">
+                  <div className="w-full">
                     <input 
                       type="text" 
                       name="location" 
                       list="location-options" 
                       value={editFormData.location} 
                       onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} 
-                      className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                      className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
                       placeholder="Select or type a location..."
                     />
-                    {editFormData.location && (
-                      <button type="button" onClick={() => setEditFormData({...editFormData, location: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
-                    )}
                   </div>
                 </div>
               </form>
-
-                
             </div>
 
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-2 sm:gap-3">
