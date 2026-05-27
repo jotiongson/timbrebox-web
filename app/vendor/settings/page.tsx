@@ -8,17 +8,17 @@ export default function SettingsPage() {
   // --- AUTHENTICATION STATE (THE BOUNCER) ---
 
   // PROD UNCOMMENT FOR PROD
-  //const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
 
   // TEST COMMENT FOR TEST
-  const [session, setSession] = useState<any>({
-    user: {
-      id: '66d6def4-2425-4248-9b90-7c418f1fd4ae',
-      email: 'dev-mode@vault.com'
-    }
-  });
+  //const [session, setSession] = useState<any>({
+  //  user: {
+  //    id: '66d6def4-2425-4248-9b90-7c418f1fd4ae',
+  //    email: 'dev-mode@vault.com'
+  //  }
+  //});
 
-  /* TEST - UNCOMMENT FOR PROD
+  TEST - UNCOMMENT FOR PROD
     useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -30,8 +30,7 @@ export default function SettingsPage() {
 
     return () => subscription.unsubscribe();
   }, []);
-  */
-
+  
   if (!session) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
