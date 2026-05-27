@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabase"; 
 import { searchDiscogsByBarcode, searchDiscogsByCatalogNumber, searchDiscogsByText, getDiscogsReleaseDetails } from "../services/discogsService";
 import BarcodeScanner from "../components/BarcodeScanner";
+import CatalogScanner from "../components/CatalogScanner";
 
 interface InventoryItem {
   id: number;
@@ -27,7 +28,7 @@ const initialFormState = {
   artist: "",
   price: "0", 
   market_price: "", 
-  weight: "120", // Defaulting to 120g
+  weight: "120",
   quantity: "1",
   location: "",
   cover_image: "", 
@@ -49,6 +50,11 @@ export default function VendorDashboard() {
   const [autoSave, setAutoSave] = useState(true); 
   const [localSearch, setLocalSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  
+  // NEW STATES
+  const [sortBy, setSortBy] = useState<'date' | 'artist'>('date');
+  const [showCatalogScanner, setShowCatalogScanner] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   const [editFormData, setEditFormData] = useState(initialFormState);
   const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
@@ -88,7 +94,7 @@ export default function VendorDashboard() {
       artist: dataToSave.artist,
       price_cents: Math.round(parseFloat(dataToSave.price || "0") * 100),
       market_price_cents: Math.round(parseFloat(dataToSave.market_price || "0") * 100), 
-      weight_grams: parseInt(dataToSave.weight) || 120, // Default to 120 if empty
+      weight_grams: parseInt(dataToSave.weight) || 120,
       quantity: parseInt(dataToSave.quantity) || 1,
       location: dataToSave.location,
       cover_image: dataToSave.cover_image, 
@@ -231,7 +237,7 @@ export default function VendorDashboard() {
         title: result.title,
         price: "0",
         market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
-        weight: result.weight || "120", // Default to 120
+        weight: result.weight || "120",
         quantity: "1",
         location: formData.location,
         cover_image: result.cover_image || "",
@@ -259,7 +265,7 @@ export default function VendorDashboard() {
         title: result.title,
         price: "0",
         market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
-        weight: result.weight || "120", // Default to 120
+        weight: result.weight || "120",
         quantity: "1",
         location: formData.location,
         cover_image: result.cover_image || "",
@@ -289,13 +295,11 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  // --- UPDATED SMART WEIGHT SELECTOR ---
   const handleSelectRelease = async (id: number) => {
     setIsSearchingDiscogs(true);
     const result = await getDiscogsReleaseDetails(id);
 
     if (result?.success) {
-      // Look inside the format description text for strings like "180g" or "200g"
       const descriptionsString = result.formats?.[0]?.descriptions?.join(" ") || "";
       let detectedWeight = 120; // Default fallback
 
@@ -308,7 +312,6 @@ export default function VendorDashboard() {
       }
 
       if (viewItem) {
-        // OVERRIDE RECORD: Updates everything EXCEPT TimbreBox price
         const { error } = await supabase.from("inventory").update({
           title: result.title,
           artist: result.artist,
@@ -321,7 +324,6 @@ export default function VendorDashboard() {
         
         if (!error) fetchInventory();
       } else {
-        // ADD NEW RECORD
         const newRecordData = {
           ...formData,
           artist: result.artist,
@@ -343,6 +345,42 @@ export default function VendorDashboard() {
     
     setSearchResults([]); 
     setIsSearchingDiscogs(false); 
+  };
+
+  // --- NEW VOICE SEARCH LOGIC ---
+  const startVoiceSearch = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      alert("Voice search is not supported in this browser. Try Chrome or Safari.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false; 
+    recognition.interimResults = true; // Gives that "live respelling" feel
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0].transcript)
+        .join('');
+      setTextQuery(transcript); 
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
   };
 
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
@@ -368,21 +406,27 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-const uniqueLocations = Array.from(new Set(inventory.map(item => item.location || "").filter(Boolean))).sort();
+  const uniqueLocations = Array.from(new Set(inventory.map(item => item.location || "").filter(Boolean))).sort();
 
   const categoryInventory = selectedCategory 
     ? inventory.filter(item => item.location === selectedCategory) 
     : inventory;
 
-  const filteredInventory = categoryInventory.filter((album) => {
+  // --- NEW SORTING LOGIC APPLIED TO FILTERED LIST ---
+  const sortedInventory = [...categoryInventory].sort((a, b) => {
+    if (sortBy === 'artist') {
+      return a.artist.localeCompare(b.artist);
+    }
+    return b.id - a.id; // Default Date Descending
+  });
+
+  const filteredInventory = sortedInventory.filter((album) => {
     const searchLower = localSearch.toLowerCase();
-    const matchesSearch = !localSearch || 
+    return !localSearch || 
       album.title.toLowerCase().includes(searchLower) ||
       album.artist.toLowerCase().includes(searchLower) ||
       (album.location && album.location.toLowerCase().includes(searchLower)) ||
       (album.tracklist && Array.isArray(album.tracklist) && album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower)));
-
-    return matchesSearch;
   });
 
   return (
@@ -519,11 +563,19 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
               </div>
               <button 
                 type="button" 
+                onClick={() => setShowCatalogScanner(true)}
+                disabled={!formData.location || isSearchingDiscogs}
+                className="flex-shrink-0 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg px-3 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                📷 OCR
+              </button>
+              <button 
+                type="button" 
                 onClick={() => handleCatalogLookup(catalog)}
                 disabled={!formData.location || isSearchingDiscogs || !catalog}
-                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 sm:px-6 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
+                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px]"
               >
-                {isSearchingDiscogs ? '⏳ ...' : 'Search'}
+                {isSearchingDiscogs ? '⏳' : 'Search'}
               </button>
             </div>
           </div>
@@ -531,7 +583,6 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
           <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
               <span>Text Search</span>
-              {/* --- UPDATED LABEL: Top 20 Matches --- */}
               <span className="text-emerald-600 font-medium">Top 20 Matches</span>
             </label>
             <div className="flex gap-2 mt-1.5 w-full">
@@ -543,15 +594,28 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
                   disabled={!formData.location || isSearchingText}
                   onChange={(e) => setTextQuery(e.target.value)} 
                   onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
-                  className="w-full border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
+                  className="w-full border border-gray-300 rounded-lg pl-3 pr-16 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
                 />
-                {textQuery && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {textQuery && (
+                    <button 
+                      type="button" 
+                      onClick={() => setTextQuery("")}
+                      className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1"
+                    >✕</button>
+                  )}
                   <button 
                     type="button" 
-                    onClick={() => setTextQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xs"
-                  >✕</button>
-                )}
+                    onClick={startVoiceSearch}
+                    disabled={!formData.location || isSearchingText}
+                    className={`p-1.5 rounded-md transition disabled:opacity-50 flex items-center justify-center ${
+                      isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-gray-400 hover:text-emerald-600 bg-gray-50'
+                    }`}
+                    title="Voice Search"
+                  >
+                    🎤
+                  </button>
+                </div>
               </div>
               <button 
                 type="button" 
@@ -565,34 +629,28 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
 
             {searchResults.length > 0 && (
               <div className="mt-3 border border-gray-200 rounded-lg bg-white shadow-sm max-h-64 overflow-y-auto w-full">
-
-{searchResults.map((res: any) => (
-  <div 
-    key={res.id} 
-    onClick={() => handleSelectRelease(res.id)}
-    className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
-  >
-    {res.thumb ? (
-      <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded shadow-sm flex-shrink-0" />
-    ) : (
-      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
-    )}
-    <div className="flex-1 min-w-0">
-      <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
-      
-      {/* --- NEW UI: Year • Country --- */}
-      <p className="text-xs text-gray-500 mt-0.5 truncate">
-        {res.year || 'Unknown Year'} • {res.country || 'Unknown Region'}
-      </p>
-      
-      {/* --- NEW UI: Label (Catalog Number) --- */}
-      <p className="text-xs text-gray-400 truncate mt-0.5">
-        {res.label?.[0] || 'Unknown Label'} {res.catno ? `(${res.catno})` : ''}
-      </p>
-    </div>
-  </div>
-))}
-                
+                {searchResults.map((res: any) => (
+                  <div 
+                    key={res.id} 
+                    onClick={() => handleSelectRelease(res.id)}
+                    className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
+                  >
+                    {res.thumb ? (
+                      <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded shadow-sm flex-shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 truncate">
+                        {res.year || 'Unknown Year'} • {res.country || 'Unknown Region'}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate mt-0.5">
+                        {res.label?.[0] || 'Unknown Label'} {res.catno ? `(${res.catno})` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -631,9 +689,24 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
         </div>
       </section>
 
+      {/* --- SORTING CONTROLS --- */}
+      <div className="flex gap-2 mb-4">
+        <button 
+          onClick={() => setSortBy('date')} 
+          className={`px-3 py-1 text-xs font-bold rounded-lg transition ${sortBy === 'date' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+        >
+          Sort: Newest
+        </button>
+        <button 
+          onClick={() => setSortBy('artist')} 
+          className={`px-3 py-1 text-xs font-bold rounded-lg transition ${sortBy === 'artist' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+        >
+          Sort: Artist A-Z
+        </button>
+      </div>
+
       {/* --- INVENTORY LIST --- */}
       <section className="mb-12 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-        
         <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h2 className="text-lg font-bold text-gray-900 tracking-tight">Items List</h2>
@@ -700,7 +773,7 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
                        </span>
                     )}
                     <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">{album.weight_grams}g</span>
-                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">x{album.quantity || 1}</span>
+                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
                     
                     {album.market_price_cents && album.market_price_cents > 0 && (
                       <span className="inline-block bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
@@ -776,7 +849,7 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
                 </div>
               </div>
 
-              {/* --- SWAPPED ORDER: Tracklist FIRST --- */}
+              {/* Tracklist above Identifiers */}
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div>
                   <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Tracklist</h4>
@@ -794,7 +867,6 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
                 </div>
               )}
 
-              {/* --- Identifiers SECOND --- */}
               {viewItem.identifiers && viewItem.identifiers.length > 0 && (
                 <div>
                   <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">Identifiers & Matrix Info</h4>
@@ -940,6 +1012,18 @@ const uniqueLocations = Array.from(new Set(inventory.map(item => item.location |
             />
           </div>
         </div>
+      )}
+
+      {/* --- CATALOG OCR SCANNER MODAL --- */}
+      {showCatalogScanner && (
+        <CatalogScanner 
+          onClose={() => setShowCatalogScanner(false)}
+          onDetected={async (text: string) => {
+            setCatalog(text); 
+            setShowCatalogScanner(false); 
+            await handleCatalogLookup(text); 
+          }}
+        />
       )}
 
     </main>
