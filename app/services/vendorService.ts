@@ -28,9 +28,11 @@ export async function updateVendorProfile(
     store_bio: storeBio 
   };
 
-  // If coordinates exist, convert them to PostGIS WKT format (Longitude goes first!)
+  // If coordinates exist, save both PostGIS format AND raw float values
   if (lat && lon) {
     payload.location = `POINT(${lon} ${lat})`;
+    payload.lat = lat;
+    payload.lon = lon;
   }
 
   const { error } = await supabase
