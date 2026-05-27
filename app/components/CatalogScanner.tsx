@@ -14,7 +14,7 @@ export default function CatalogScanner({ onDetected, onClose }: CatalogScannerPr
   const [scannedText, setScannedText] = useState<string>("Scanning...");
   const [isProcessing, setIsProcessing] = useState(false);
   const workerRef = useRef<Tesseract.Worker | null>(null);
-  const requestRef = useRef<number>();
+ const requestRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
