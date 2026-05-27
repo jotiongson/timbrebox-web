@@ -37,7 +37,14 @@ const initialFormState = {
 };
 
 export default function VendorDashboard() {
-  const session = { user: { id: "00000000-0000-0000-0000-000000000000", email: "dev-mode@vault.com" } };
+  // TEST: Hardcoded Vendor ID uncomment for testing
+  //const session = { user: { id: "00000000-0000-0000-0000-000000000000", email: "dev-mode@vault.com" } };
+
+  // PROD: Hardcoded Vendor ID uncomment for production these 2 lines
+  const [session, setSession] = useState<any>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+
   
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,14 +76,36 @@ export default function VendorDashboard() {
   const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
-    fetchInventory();
+    // 1. Grab the active user from Supabase
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsAuthLoading(false);
+      
+      // 2. Only fetch inventory if someone is actually logged in
+      if (session) {
+        fetchInventory(session.user.id);
+      }
+    });
+
+    // 3. Listen for logins/logouts in real-time
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        fetchInventory(session.user.id);
+      } else {
+        setInventory([]); // Clear screen if they log out
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  async function fetchInventory() {
+async function fetchInventory(vendorId: string) {
     setLoading(true);
     const { data, error } = await supabase
       .from("inventory")
       .select("id, artist, title, weight_grams, price_cents, market_price_cents, quantity, location, year, genres, tracklist, identifiers, cover_image")
+      .eq("vendor_id", vendorId) // <-- THIS LOCKS THE VAULT TO ONLY THEIR ITEMS
       .order("id", { ascending: false });
 
     if (error) console.error("Error fetching inventory:", error);
@@ -427,6 +456,20 @@ export default function VendorDashboard() {
       (album.tracklist && Array.isArray(album.tracklist) && album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower)));
   });
 
+  if (isAuthLoading) {
+    return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Unlocking Vault...</div>;
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+        <p className="text-gray-500 mb-6">You must be logged in to access the Vendor Vault.</p>
+        <a href="/login" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition">Go to Login</a>
+      </div>
+    );
+  }
+
   return (
     <main className="p-4 sm:p-8 w-full max-w-full overflow-x-hidden mx-auto font-sans relative animate-fade-in pb-20">
       
@@ -445,7 +488,7 @@ export default function VendorDashboard() {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">TimbreBox</h1>
-            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Vault Unlocked • {session.user.email}</p>
+            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Vault Unlocked • {session?.user?.email}</p>
           </div>
         </div>
         
