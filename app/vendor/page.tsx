@@ -37,14 +37,9 @@ const initialFormState = {
 };
 
 export default function VendorDashboard() {
-  // TEST: Hardcoded Vendor ID uncomment for testing
-  //const session = { user: { id: "00000000-0000-0000-0000-000000000000", email: "dev-mode@vault.com" } };
-
-  // PROD: Hardcoded Vendor ID uncomment for production these 2 lines
+  // --- NEW AUTH STATES ---
   const [session, setSession] = useState<any>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-
-
   
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +53,6 @@ export default function VendorDashboard() {
   const [localSearch, setLocalSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
-  // States for Sorting, Voice, and OCR
   const [sortBy, setSortBy] = useState<'date' | 'artist'>('date');
   const [showCatalogScanner, setShowCatalogScanner] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -75,37 +69,34 @@ export default function VendorDashboard() {
   const [lookupError, setLookupError] = useState("");
   const [showScanner, setShowScanner] = useState(false);
 
+  // --- AUTH & FETCH EFFECT ---
   useEffect(() => {
-    // 1. Grab the active user from Supabase
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setIsAuthLoading(false);
-      
-      // 2. Only fetch inventory if someone is actually logged in
       if (session) {
         fetchInventory(session.user.id);
       }
     });
 
-    // 3. Listen for logins/logouts in real-time
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
         fetchInventory(session.user.id);
       } else {
-        setInventory([]); // Clear screen if they log out
+        setInventory([]);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-async function fetchInventory(vendorId: string) {
+  async function fetchInventory(vendorId: string) {
     setLoading(true);
     const { data, error } = await supabase
       .from("inventory")
       .select("id, artist, title, weight_grams, price_cents, market_price_cents, quantity, location, year, genres, tracklist, identifiers, cover_image")
-      .eq("vendor_id", vendorId) // <-- THIS LOCKS THE VAULT TO ONLY THEIR ITEMS
+      .eq("vendor_id", vendorId) // SECURE VENDOR FILTER
       .order("id", { ascending: false });
 
     if (error) console.error("Error fetching inventory:", error);
@@ -118,7 +109,7 @@ async function fetchInventory(vendorId: string) {
     setLookupError("");
 
     const payload = {
-      vendor_id: session.user.id, 
+      vendor_id: session.user.id, // REAL VENDOR ID
       title: dataToSave.title,
       artist: dataToSave.artist,
       price_cents: Math.round(parseFloat(dataToSave.price || "0") * 100),
@@ -192,7 +183,7 @@ async function fetchInventory(vendorId: string) {
       else {
         setIsModalOpen(false);
         setItemToEdit(null);
-        fetchInventory();
+        fetchInventory(session.user.id);
       }
       setIsUpdating(false);
     } else {
@@ -212,7 +203,7 @@ async function fetchInventory(vendorId: string) {
     else {
       setIsModalOpen(false);
       setItemToEdit(null);
-      fetchInventory(); 
+      fetchInventory(session.user.id); 
     }
     setIsUpdating(false);
   };
@@ -330,7 +321,7 @@ async function fetchInventory(vendorId: string) {
 
     if (result?.success) {
       const descriptionsString = result.formats?.[0]?.descriptions?.join(" ") || "";
-      let detectedWeight = 120; // Default fallback
+      let detectedWeight = 120; 
 
       if (descriptionsString.includes("200g")) {
         detectedWeight = 200;
@@ -351,7 +342,7 @@ async function fetchInventory(vendorId: string) {
           weight_grams: detectedWeight
         }).eq("id", viewItem.id);
         
-        if (!error) fetchInventory();
+        if (!error) fetchInventory(session.user.id);
       } else {
         const newRecordData = {
           ...formData,
@@ -456,6 +447,7 @@ async function fetchInventory(vendorId: string) {
       (album.tracklist && Array.isArray(album.tracklist) && album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower)));
   });
 
+  // --- SECURITY GUARDS ---
   if (isAuthLoading) {
     return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Unlocking Vault...</div>;
   }
@@ -495,7 +487,7 @@ async function fetchInventory(vendorId: string) {
         <div className="flex flex-wrap gap-2 sm:gap-4 w-full md:w-auto">
           <a href="/vendor/settings" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">⚙️ Settings</a>
           <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">View Radar</a>
-          <button className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">Sign Out</button>
+          <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">Sign Out</button>
         </div>
       </header>
 
