@@ -912,19 +912,14 @@ export default function VendorDashboard() {
             <div className="p-6 overflow-y-auto">
               <form id="recordForm" onSubmit={handleModalSubmit} className="flex flex-col gap-4">
                 
-            <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
+                
+                {/* --- RESTORED TITLE FIELD --- */}
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
                   <div className="relative w-full">
-                    <input 
-                      type="text" 
-                      name="location" 
-                      list="location-options" 
-                      value={editFormData.location} 
-                      onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} 
-                      className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-                    />
-                    {editFormData.location && (
-                      <button type="button" onClick={() => setEditFormData({...editFormData, location: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
+                    <input type="text" name="title" required value={editFormData.title} onChange={(e) => setEditFormData({...editFormData, title: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    {editFormData.title && (
+                      <button type="button" onClick={() => setEditFormData({...editFormData, title: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
                     )}
                   </div>
                 </div>
@@ -961,16 +956,27 @@ export default function VendorDashboard() {
                   </div>
                 </div>
 
+                {/* --- DYNAMIC LOCATION COMBOBOX --- */}
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
                   <div className="relative w-full">
-                    <input type="text" name="location" value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    <input 
+                      type="text" 
+                      name="location" 
+                      list="location-options" 
+                      value={editFormData.location} 
+                      onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} 
+                      className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                      placeholder="Select or type a location..."
+                    />
                     {editFormData.location && (
                       <button type="button" onClick={() => setEditFormData({...editFormData, location: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
                     )}
                   </div>
                 </div>
               </form>
+
+                
             </div>
 
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-2 sm:gap-3">
