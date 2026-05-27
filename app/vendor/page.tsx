@@ -156,7 +156,7 @@ async function fetchInventory(vendorId: string) {
       else {
         setFormData({ ...initialFormState, location: dataToSave.location });
         setBarcode("");
-        fetchInventory();
+        fetchInventory(session.user.id);
       }
     } else {
       const { error } = await supabase.from("inventory").insert([payload]);
@@ -164,7 +164,7 @@ async function fetchInventory(vendorId: string) {
       else {
         setFormData({ ...initialFormState, location: dataToSave.location });
         setBarcode("");
-        fetchInventory();
+        fetchInventory(session.user.id);
       }
     }
     setIsUpdating(false);
