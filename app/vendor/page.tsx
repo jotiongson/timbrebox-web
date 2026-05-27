@@ -87,8 +87,26 @@ export default function VendorDashboard() {
   const handleTextSearch = async (e?: React.FormEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (!textQuery) return;
+    
     setIsSearchingText(true);
-    // Add your text search logic here
+    setLookupError("");
+    
+    try {
+      // We'll call it 'response' instead of 'results' to avoid confusion
+      const response = await searchDiscogsByText(textQuery); 
+      
+      // Check if it was successful AND has the inner 'results' array
+      if (response && response.success && response.results && response.results.length > 0) {
+        setSearchResults(response.results);
+      } else {
+        setLookupError(response?.error || "No results found for that search.");
+        setSearchResults([]);
+      }
+    } catch (err) {
+      console.error("Text search failed:", err);
+      setLookupError("Search failed. Check your API connection.");
+    }
+    
     setIsSearchingText(false);
   };
 
