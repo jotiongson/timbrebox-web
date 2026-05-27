@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from 'next/navigation'; 
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase"; 
 import { searchDiscogsByBarcode, searchDiscogsByCatalogNumber, searchDiscogsByText, getDiscogsReleaseDetails } from "../services/discogsService";
@@ -452,8 +453,6 @@ export default function VendorDashboard() {
     return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Unlocking Vault...</div>;
   }
 
-import { useRouter } from 'next/navigation'; // Make sure you have this import
-// ... inside your component
 const router = useRouter();
 
 if (!session && !isAuthLoading) {
