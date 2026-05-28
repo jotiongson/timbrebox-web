@@ -33,6 +33,7 @@ const initialFormState = {
   weight: "120",
   quantity: "1",
   location: "",
+  condition: "VG+",
   cover_image: "", 
   tracklist: [] as any[],
   identifiers: [] as any[]
