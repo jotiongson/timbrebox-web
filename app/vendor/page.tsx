@@ -998,33 +998,6 @@ if (!session && !isAuthLoading) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
-                    <input type="number" name="weight" value={editFormData.weight} onChange={(e) => setEditFormData({...editFormData, weight: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
-                    <input type="number" name="quantity" min="1" value={editFormData.quantity} onChange={(e) => setEditFormData({...editFormData, quantity: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Condition</label>
-                    <select
-                      value={editFormData.condition}
-                      onChange={(e) => setEditFormData({...editFormData, condition: e.target.value})}
-                      className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                    >
-                      <option value="NEW">NEW</option>
-                      <option value="M">M (Mint)</option>
-                      <option value="NM">NM (Near Mint)</option>
-                      <option value="EX">EX (Excellent)</option>
-                      <option value="VG+">VG+</option>
-                      <option value="VG">VG (Very Good)</option>
-                      <option value="G">G (Good)</option>
-                    </select>
-                  </div>
-                </div>
-
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
                   <div className="w-full">
@@ -1039,23 +1012,7 @@ if (!session && !isAuthLoading) {
                     />
                   </div>
                 </div>
-                
-                {/* --- DYNAMIC LOCATION COMBOBOX --- */}
-                <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
-                  <div className="w-full">
-                    <input 
-                      type="text" 
-                      name="location" 
-                      list="location-options" 
-                      value={editFormData.location} 
-                      onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} 
-                      className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-                      placeholder="Select or type a location..."
-                    />
-                  </div>
-                </div>
-              </form>
+               </form>
             </div>
 
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-2 sm:gap-3">
