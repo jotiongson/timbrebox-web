@@ -51,7 +51,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">TimbreBox</h1>
-          <p className="text-gray-500">Unlock your vinyl vault</p>
+          <p className="text-gray-500">Unlock your vinyl collection</p>
         </div>
 
         <form onSubmit={handleAuth} className="space-y-4">
@@ -99,7 +99,7 @@ export default function LoginPage() {
             onClick={() => setIsSignUp(!isSignUp)}
             className="text-sm font-bold text-emerald-600 hover:text-emerald-700 transition"
           >
-            {isSignUp ? 'Already have an account? Sign In' : 'Need a vault? Create an Account'}
+            {isSignUp ? 'Already have an account? Sign In' : 'Need a Vinyl Collection Vault? Create an Account'}
           </button>
 
           {/* --- ADD THIS NEW BLOCK BELOW YOUR TOGGLE BUTTON --- */}
