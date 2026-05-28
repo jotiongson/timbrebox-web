@@ -66,7 +66,7 @@ export default function PublicRadar() {
       setStores(data || []);
     } catch (err: any) {
       console.error('Radar failure:', err.message);
-      setErrorMsg('Radar network error. Please try again.');
+      setErrorMsg('Supabase Error: ' + err.message); // <-- This will print the real error
     } finally {
       setScanning(false);
     }
