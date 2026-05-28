@@ -83,7 +83,7 @@ export default function PublicRadar() {
       {/* RADAR CONSOLE */}
       <section className="max-w-5xl mx-auto bg-gray-900 rounded-3xl p-10 text-center shadow-2xl relative overflow-hidden mb-12">
         <div className="relative z-10">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Find Vinyl Vaults Near You</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Find Vinyl Records Near You</h2>
           <p className="text-gray-400 mb-8 max-w-xl mx-auto">Lock onto local independent sellers, view their exact distance, and browse their pristine crates before you drive.</p>
           
           <button 
@@ -135,7 +135,7 @@ export default function PublicRadar() {
 
         {!scanning && stores.length === 0 && !errorMsg && (
           <div className="text-center text-gray-400 py-12">
-            Radar is standing by. Click scan to locate nearby vaults.
+            Radar is standing by. Click scan to locate nearby vinyl records.
           </div>
         )}
       </section>
