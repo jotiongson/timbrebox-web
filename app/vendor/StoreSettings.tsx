@@ -51,7 +51,7 @@ export default function StoreSettings({ userId }: { userId: string }) {
   const handleSave = async () => {
     setStatus('Saving...');
     const success = await updateVendorProfile(userId, storeName, storeBio, lat, lon);
-    setStatus(success ? 'Vault secured and mapped!' : 'Error saving profile.');
+    setStatus(success ? 'Vinyl records secured and mapped!' : 'Error saving profile.');
     setTimeout(() => setStatus(''), 3000);
   };
 
