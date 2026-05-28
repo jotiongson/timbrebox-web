@@ -17,6 +17,7 @@ interface InventoryItem {
   status?: string;
   quantity?: number;
   location?: string;
+  condition: "VG+",
   year?: string;
   genres?: string[];
   tracklist?: any[];
@@ -118,6 +119,7 @@ export default function VendorDashboard() {
       weight_grams: parseInt(dataToSave.weight) || 120,
       quantity: parseInt(dataToSave.quantity) || 1,
       location: dataToSave.location,
+      condition: dataToSave.condition,
       cover_image: dataToSave.cover_image, 
       tracklist: dataToSave.tracklist,
       identifiers: dataToSave.identifiers
@@ -175,6 +177,7 @@ export default function VendorDashboard() {
         weight_grams: parseInt(editFormData.weight) || 120,
         quantity: parseInt(editFormData.quantity) || 1,
         location: editFormData.location,
+        condition: editFormData.condition,
         cover_image: editFormData.cover_image,
       };
 
@@ -220,6 +223,7 @@ export default function VendorDashboard() {
       weight: album.weight_grams.toString(),
       quantity: (album.quantity || 1).toString(),
       location: album.location || "",
+      condition: album.condition || "VG+",
       cover_image: album.cover_image || "", 
       tracklist: album.tracklist || [],
       identifiers: album.identifiers || []
@@ -955,14 +959,30 @@ if (!session && !isAuthLoading) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Your Price ($) <span className="text-red-500">*</span></label>
-                    <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
+                    <input type="number" name="weight" value={editFormData.weight} onChange={(e) => setEditFormData({...editFormData, weight: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-emerald-600 uppercase tracking-wider pl-1">Discogs Lowest ($)</label>
-                    <input type="number" name="market_price" readOnly value={editFormData.market_price} className="w-full mt-1.5 border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="N/A" />
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
+                    <input type="number" name="quantity" min="1" value={editFormData.quantity} onChange={(e) => setEditFormData({...editFormData, quantity: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Condition</label>
+                    <select
+                      value={editFormData.condition}
+                      onChange={(e) => setEditFormData({...editFormData, condition: e.target.value})}
+                      className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    >
+                      <option value="NEW">NEW</option>
+                      <option value="M">M (Mint)</option>
+                      <option value="NM">NM (Near Mint)</option>
+                      <option value="EX">EX (Excellent)</option>
+                      <option value="VG+">VG+</option>
+                      <option value="VG">VG (Very Good)</option>
+                      <option value="G">G (Good)</option>
+                    </select>
                   </div>
                 </div>
 
