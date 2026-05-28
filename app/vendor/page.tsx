@@ -97,7 +97,7 @@ export default function VendorDashboard() {
     setLoading(true);
     const { data, error } = await supabase
       .from("inventory")
-      .select("id, artist, title, weight_grams, price_cents, market_price_cents, quantity, location, year, genres, tracklist, identifiers, cover_image")
+      .select("id, artist, title, weight_grams, price_cents, market_price_cents, quantity, location, condition, year, genres, tracklist, identifiers, cover_image")
       .eq("vendor_id", vendorId) // SECURE VENDOR FILTER
       .order("id", { ascending: false });
 
