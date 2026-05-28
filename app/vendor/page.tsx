@@ -198,7 +198,7 @@ export default function VendorDashboard() {
   };
 
   const handleDeleteRecord = async (id: number) => {
-    const confirmDelete = window.confirm("Are you sure you want to permanently delete this record from your vault?");
+    const confirmDelete = window.confirm("Are you sure you want to permanently delete this record from your collection?");
     if (!confirmDelete) return;
 
     setIsUpdating(true);
@@ -455,7 +455,7 @@ export default function VendorDashboard() {
 
   // --- SECURITY GUARDS ---
   if (isAuthLoading) {
-    return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Unlocking Vault...</div>;
+    return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Unlocking Account...</div>;
   }
 
 const router = useRouter();
@@ -483,7 +483,7 @@ if (!session && !isAuthLoading) {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">TimbreBox</h1>
-            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Vault Unlocked • {session?.user?.email}</p>
+            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Account Unlocked • {session?.user?.email}</p>
           </div>
         </div>
         
@@ -510,7 +510,7 @@ if (!session && !isAuthLoading) {
           
           <div className="sm:col-span-2 md:col-span-4 bg-emerald-50 border-2 border-emerald-500 rounded-xl p-5 mb-2 shadow-sm w-full">
             <label className="text-sm font-black text-emerald-900 uppercase tracking-widest flex items-center justify-between mb-2">
-              <span className="flex items-center gap-2">📍 Active Vault Location</span>
+              <span className="flex items-center gap-2">📍 Active Collector Location</span>
               <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-1 rounded-md font-bold">REQUIRED FOR BATCH SCAN</span>
             </label>
             <div className="relative w-full">
@@ -754,7 +754,7 @@ if (!session && !isAuthLoading) {
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
             <input 
               type="text" 
-              placeholder="Search local vault..." 
+              placeholder="Search local vinyl records..." 
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
               className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -770,7 +770,7 @@ if (!session && !isAuthLoading) {
         </div>
         
         {loading ? (
-          <div className="p-8 text-center text-gray-500 animate-pulse">Loading vault data...</div>
+          <div className="p-8 text-center text-gray-500 animate-pulse">Loading record data...</div>
         ) : filteredInventory.length === 0 ? (
           <div className="p-12 text-center">
             <p className="text-gray-500 font-medium">No records found matching your search.</p>
