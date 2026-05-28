@@ -998,6 +998,24 @@ if (!session && !isAuthLoading) {
                   </div>
                 </div>
 
+                {/* --- NEW CONDITION DROPDOWN --- */}
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Condition</label>
+                  <select
+                    value={editFormData.condition}
+                    onChange={(e) => setEditFormData({...editFormData, condition: e.target.value})}
+                    className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                  >
+                    <option value="NEW">NEW</option>
+                    <option value="M">M (Mint)</option>
+                    <option value="NM">NM (Near Mint)</option>
+                    <option value="EX">EX (Excellent)</option>
+                    <option value="VG+">VG+</option>
+                    <option value="VG">VG (Very Good)</option>
+                    <option value="G">G (Good)</option>
+                  </select>
+                </div>
+                
                 {/* --- DYNAMIC LOCATION COMBOBOX --- */}
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
