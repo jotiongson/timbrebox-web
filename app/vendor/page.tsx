@@ -989,6 +989,17 @@ if (!session && !isAuthLoading) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Your Price ($) <span className="text-red-500">*</span></label>
+                    <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-emerald-600 uppercase tracking-wider pl-1">Discogs Lowest ($)</label>
+                    <input type="number" name="market_price" readOnly value={editFormData.market_price} className="w-full mt-1.5 border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="N/A" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
                     <input type="number" name="weight" value={editFormData.weight} onChange={(e) => setEditFormData({...editFormData, weight: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
@@ -996,24 +1007,37 @@ if (!session && !isAuthLoading) {
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Qty</label>
                     <input type="number" name="quantity" min="1" value={editFormData.quantity} onChange={(e) => setEditFormData({...editFormData, quantity: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
                   </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Condition</label>
+                    <select
+                      value={editFormData.condition}
+                      onChange={(e) => setEditFormData({...editFormData, condition: e.target.value})}
+                      className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    >
+                      <option value="NEW">NEW</option>
+                      <option value="M">M (Mint)</option>
+                      <option value="NM">NM (Near Mint)</option>
+                      <option value="EX">EX (Excellent)</option>
+                      <option value="VG+">VG+</option>
+                      <option value="VG">VG (Very Good)</option>
+                      <option value="G">G (Good)</option>
+                    </select>
+                  </div>
                 </div>
 
-                {/* --- NEW CONDITION DROPDOWN --- */}
                 <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Condition</label>
-                  <select
-                    value={editFormData.condition}
-                    onChange={(e) => setEditFormData({...editFormData, condition: e.target.value})}
-                    className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                  >
-                    <option value="NEW">NEW</option>
-                    <option value="M">M (Mint)</option>
-                    <option value="NM">NM (Near Mint)</option>
-                    <option value="EX">EX (Excellent)</option>
-                    <option value="VG+">VG+</option>
-                    <option value="VG">VG (Very Good)</option>
-                    <option value="G">G (Good)</option>
-                  </select>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
+                  <div className="w-full">
+                    <input 
+                      type="text" 
+                      name="location" 
+                      list="location-options" 
+                      value={editFormData.location} 
+                      onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} 
+                      className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
+                      placeholder="Select or type a location..."
+                    />
+                  </div>
                 </div>
                 
                 {/* --- DYNAMIC LOCATION COMBOBOX --- */}
