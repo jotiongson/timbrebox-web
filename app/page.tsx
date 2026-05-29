@@ -177,12 +177,12 @@ export default function PublicRadar() {
       {/* THE COLLECTION MODAL */}
       {selectedStore && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-40 p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
             {/* Modal Header */}
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <div className="p-5 sm:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <div>
-                <h3 className="text-2xl font-bold text-gray-900">{selectedStore.store_name}</h3>
-                <p className="text-sm text-gray-500">{selectedStore.distance_miles.toFixed(1)} miles away</p>
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{selectedStore.store_name}</h3>
+                <p className="text-xs sm:text-sm text-gray-500">{selectedStore.distance_miles.toFixed(1)} miles away</p>
               </div>
               <button 
                 onClick={() => setSelectedStore(null)}
@@ -193,31 +193,45 @@ export default function PublicRadar() {
             </div>
             
             {/* Modal Inventory List */}
-            <div className="p-6 overflow-y-auto bg-white flex-1">
+            <div className="p-4 sm:p-6 overflow-y-auto bg-gray-50/50 flex-1">
               {selectedStore.active_records.length === 0 ? (
                 <p className="text-center text-gray-400 italic">This collection is currently empty.</p>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {selectedStore.active_records.map((record) => (
-                    <div key={record.id} className="border border-gray-100 rounded-xl p-4 flex justify-between items-center hover:border-emerald-200 transition">
-                      <div>
-                        <h4 className="font-bold text-gray-900">{record.title}</h4>
-                        <p className="text-sm text-gray-500">{record.artist}</p>
-                          <div className="flex gap-2 mt-2">
-                            <span className="text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{record.weight_grams}g</span>
-                            <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Grade: {record.condition || 'New'}</span>
-                            <span className="text-[10px] uppercase tracking-wider font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Qty: {record.quantity}</span>
-                          </div>
+                    <div key={record.id} className="border border-gray-100 rounded-2xl p-3 sm:p-4 flex gap-3 sm:gap-4 items-center hover:border-emerald-200 hover:shadow-md transition bg-white cursor-pointer group" onClick={() => setInspectingRecord(record)}>
+                      
+                      {/* Album Thumbnail */}
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 flex items-center justify-center shadow-sm group-hover:shadow transition">
+                        {record.cover_image ? (
+                          <img src={record.cover_image} alt={record.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-2xl opacity-30">💿</span>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg text-emerald-600 mb-2">${(record.price_cents / 100).toFixed(2)}</div>
+
+                      {/* Info Panel */}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-gray-900 text-sm sm:text-base truncate">{record.title}</h4>
+                        <p className="text-xs sm:text-sm text-gray-500 truncate mb-1.5">{record.artist}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{record.weight_grams}g</span>
+                          <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">Grade: {record.condition || 'New'}</span>
+                          <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">Qty: {record.quantity}</span>
+                        </div>
+                      </div>
+
+                      {/* Action Panel */}
+                      <div className="text-right flex-shrink-0 flex flex-col items-end justify-center">
+                        <div className="font-black text-base sm:text-lg text-emerald-600 mb-1.5">${(record.price_cents / 100).toFixed(2)}</div>
                         <button 
-                          onClick={() => setInspectingRecord(record)}
-                          className="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm"
+                          onClick={(e) => { e.stopPropagation(); setInspectingRecord(record); }}
+                          className="bg-gray-900 group-hover:bg-emerald-600 text-white text-[10px] sm:text-xs font-bold px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition shadow-sm"
                         >
-                          Inspect Record
+                          Inspect
                         </button>
                       </div>
+
                     </div>
                   ))}
                 </div>
@@ -227,12 +241,12 @@ export default function PublicRadar() {
         </div>
       )}
 
-      {/* --- NEW: THE RECORD INSPECTOR MODAL --- */}
+      {/* --- THE RECORD INSPECTOR MODAL --- */}
       {inspectingRecord && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-8">
           <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row shadow-2xl overflow-hidden animate-fade-in relative">
             
-            {/* Close Button (Absolute positioned for overlay effect) */}
+            {/* Close Button */}
             <button 
               onClick={() => setInspectingRecord(null)}
               className="absolute top-4 right-4 z-10 bg-white/90 hover:bg-white text-gray-900 rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-lg transition"
