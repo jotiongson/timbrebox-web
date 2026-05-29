@@ -299,20 +299,47 @@ export default function PublicRadar() {
               <div className="mt-auto border-t border-gray-200 pt-6">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="bg-gray-900 text-white text-[10px] uppercase tracking-widest font-black px-2 py-1 rounded">Collector's Corner</span>
-                  <span className="text-xs font-semibold text-gray-400">Matrix & Pressing Details</span>
+                  <span className="text-xs font-semibold text-gray-400">Visual Verification</span>
                 </div>
                 
                 <div className="bg-gray-900 rounded-xl p-5 text-left border border-gray-800 shadow-inner">
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Identifiers</p>
-                      <p className="text-sm font-mono text-gray-300">See Photos</p>
+                  
+                  {/* DYNAMIC SWIPEABLE GALLERY */}
+                  {galleryImages.length === 0 ? (
+                    <div className="w-full h-24 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-500 bg-gray-800/50">
+                      <span className="text-xl mb-1">🔍</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest">Awaiting Verification Photos</span>
                     </div>
-                    <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Pressing/Year</p>
-                      <p className="text-sm font-mono text-gray-300">See Photos</p>
+                  ) : (
+                    <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory style={{ scrollbarWidth: 'none' }}">
+                      {galleryImages.map((img, i) => (
+                        <div key={img.id} className="flex-shrink-0 w-32 h-32 sm:w-40 sm:h-40 snap-center rounded-lg overflow-hidden border border-gray-700 bg-gray-800 relative group">
+                          <img src={img.image_url} alt={`Gallery view ${i+1}`} className="w-full h-full object-cover" />
+                          
+                          {/* THE NEW PHOTO TAG BADGE */}
+                          <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent pt-2 pb-4 px-2 pointer-events-none">
+                            <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest drop-shadow-md">
+                              {img.caption || 'Gallery Photo'}
+                            </span>
+                          </div>
+                          
+                          {/* Hover Overlay for High-Res Viewing */}
+                          <a 
+                            href={img.image_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition cursor-pointer"
+                          >
+                            <span className="text-white text-xs font-bold uppercase tracking-wider bg-gray-900/80 px-3 py-1.5 rounded-full border border-gray-600">
+                              🔍 Full Size
+                            </span>
+                          </a>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  )}
+                </div>
+              </div>
                   
                   {/* DYNAMIC SWIPEABLE GALLERY */}
                   {galleryImages.length === 0 ? (
