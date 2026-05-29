@@ -471,7 +471,8 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false); 
   };
 
-  const startVoiceSearch = () => {
+  // --- UPGRADED MULTI-TARGET VOICE SEARCH ---
+  const startVoiceSearch = (targetTab: 'text' | 'catalog') => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
@@ -491,7 +492,14 @@ export default function VendorDashboard() {
       const transcript = Array.from(event.results)
         .map((result: any) => result[0].transcript)
         .join('');
-      setTextQuery(transcript); 
+      
+      // Route the dictation dynamically based on the active tab
+      if (targetTab === 'text') {
+        setTextQuery(transcript); 
+      } else if (targetTab === 'catalog') {
+        // Auto-uppercase the catalog dictation so it's perfectly formatted
+        setCatalog(transcript.toUpperCase());
+      }
     };
 
     recognition.onerror = (event: any) => {
@@ -759,7 +767,7 @@ export default function VendorDashboard() {
         )}
       </section>
 
-      {/* --- NEW: RAPID INSERTION SCANNER MODAL (ADDICTING COMMAND CENTER) --- */}
+      {/* --- RAPID INSERTION SCANNER MODAL (ADDICTING COMMAND CENTER) --- */}
       {isScannerModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden relative animate-fade-in flex flex-col max-h-[95vh]">
@@ -836,15 +844,28 @@ export default function VendorDashboard() {
               {scanTab === 'catalog' && (
                 <div className="animate-fade-in">
                   <div className="flex gap-2 mb-2">
-                    <input 
-                      type="text" 
-                      placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152..."} 
-                      value={catalog} 
-                      disabled={!formData.location || isSearchingDiscogs}
-                      onChange={(e) => setCatalog(e.target.value)} 
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
-                      className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
-                    />
+                    <div className="relative flex-1">
+                      <input 
+                        type="text" 
+                        placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152..."} 
+                        value={catalog} 
+                        disabled={!formData.location || isSearchingDiscogs}
+                        onChange={(e) => setCatalog(e.target.value)} 
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
+                        className="w-full border border-gray-200 rounded-xl pl-4 pr-16 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {catalog && !isListening && (
+                          <button type="button" onClick={() => setCatalog("")} className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1">✕</button>
+                        )}
+                        <button 
+                          type="button" 
+                          onClick={() => startVoiceSearch('catalog')}
+                          disabled={!formData.location || isSearchingDiscogs}
+                          className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}
+                        >🎤</button>
+                      </div>
+                    </div>
                     <button 
                       type="button" 
                       onClick={() => handleCatalogLookup(catalog)}
@@ -877,14 +898,19 @@ export default function VendorDashboard() {
                         disabled={!formData.location || isSearchingText}
                         onChange={(e) => setTextQuery(e.target.value)} 
                         onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
-                        className="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
+                        className="w-full border border-gray-200 rounded-xl pl-4 pr-16 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
                       />
-                      <button 
-                        type="button" 
-                        onClick={startVoiceSearch}
-                        disabled={!formData.location || isSearchingText}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}
-                      >🎤</button>
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {textQuery && !isListening && (
+                          <button type="button" onClick={() => setTextQuery("")} className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1">✕</button>
+                        )}
+                        <button 
+                          type="button" 
+                          onClick={() => startVoiceSearch('text')}
+                          disabled={!formData.location || isSearchingText}
+                          className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}
+                        >🎤</button>
+                      </div>
                     </div>
                     <button 
                       type="button" 
@@ -1132,7 +1158,6 @@ export default function VendorDashboard() {
                        <p className="text-xs text-gray-500 leading-tight mt-1">Snap photos of specific details for buyers to verify.</p>
                      </div>
                      
-                     {/* THE NEW PHOTO TAG DROPDOWN */}
                      <select 
                        value={uploadCaption}
                        onChange={(e) => setUploadCaption(e.target.value)}
@@ -1152,7 +1177,6 @@ export default function VendorDashboard() {
                        <div key={img.id} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200 group">
                          <img src={img.image_url} alt="Gallery item" className="w-full h-full object-cover" />
                          
-                         {/* CAPTION OVERLAY OVER VENDOR IMAGES */}
                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
                            <p className="text-[8px] text-white font-bold uppercase tracking-wider text-center truncate">{img.caption}</p>
                          </div>
