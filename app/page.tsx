@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from './supabase'; // Adjust path if your client is elsewhere
 
 // TypeScript definitions for our new grouped data
@@ -32,6 +32,25 @@ export default function PublicRadar() {
   
   // NEW STATE: Tracks which record the user is currently inspecting
   const [inspectingRecord, setInspectingRecord] = useState<VinylRecord | null>(null);
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
+
+  // FETCH GALLERY IMAGES WHEN INSPECTOR OPENS
+  useEffect(() => {
+    if (inspectingRecord) {
+      const fetchImages = async () => {
+        const { data } = await supabase
+          .from('record_images')
+          .select('*')
+          .eq('record_id', inspectingRecord.id)
+          .order('created_at', { ascending: true });
+        
+        setGalleryImages(data || []);
+      };
+      fetchImages();
+    } else {
+      setGalleryImages([]); // Clear when modal closes
+    }
+  }, [inspectingRecord]);
 
   // 1. The Radar Ping
   const handleScanRadar = () => {
@@ -222,7 +241,7 @@ export default function PublicRadar() {
             </button>
 
             {/* Left Column: Album Art */}
-            <div className="md:w-5/12 bg-gray-100 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-gray-200 min-h-[250px]">
+            <div className="md:w-5/12 bg-gray-100 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-gray-200 min-h-[250px] relative">
               {inspectingRecord.cover_image ? (
                 <img src={inspectingRecord.cover_image} alt="Album Cover" className="w-full h-auto object-cover rounded-xl shadow-lg" />
               ) : (
@@ -273,20 +292,41 @@ export default function PublicRadar() {
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Identifiers</p>
-                      <p className="text-sm font-mono text-gray-300">Awaiting Upload</p>
+                      <p className="text-sm font-mono text-gray-300">See Photos</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Pressing/Year</p>
-                      <p className="text-sm font-mono text-gray-300">Awaiting Upload</p>
+                      <p className="text-sm font-mono text-gray-300">See Photos</p>
                     </div>
                   </div>
                   
-                  {/* Future Photo Gallery Placeholder */}
-                  <div className="w-full h-24 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-500 bg-gray-800/50">
-                    <span className="text-xl mb-1">🔍</span>
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Dead Wax / Artwork Gallery</span>
-                    <span className="text-[9px] text-gray-600 mt-1">Photos coming soon</span>
-                  </div>
+                  {/* DYNAMIC SWIPEABLE GALLERY */}
+                  {galleryImages.length === 0 ? (
+                    <div className="w-full h-24 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-500 bg-gray-800/50">
+                      <span className="text-xl mb-1">🔍</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest">No Additional Photos</span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory style={{ scrollbarWidth: 'none' }}">
+                      {galleryImages.map((img, i) => (
+                        <div key={img.id} className="flex-shrink-0 w-32 h-32 sm:w-40 sm:h-40 snap-center rounded-lg overflow-hidden border border-gray-700 bg-gray-800 relative group">
+                          <img src={img.image_url} alt={`Gallery view ${i+1}`} className="w-full h-full object-cover" />
+                          
+                          {/* Hover Overlay for High-Res Viewing */}
+                          <a 
+                            href={img.image_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition cursor-pointer"
+                          >
+                            <span className="text-white text-xs font-bold uppercase tracking-wider bg-gray-900/80 px-3 py-1.5 rounded-full border border-gray-600">
+                              🔍 Full Size
+                            </span>
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
