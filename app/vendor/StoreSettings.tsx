@@ -57,7 +57,7 @@ export default function StoreSettings({ userId }: { userId: string }) {
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-md mb-8 border border-gray-100">
-      <h2 className="text-xl font-bold mb-4 text-gray-900">Store Profile & Radar Setup</h2>
+      <h2 className="text-xl font-bold mb-4 text-gray-900">Account Profile & Radar Setup</h2>
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700">Store Name</label>
