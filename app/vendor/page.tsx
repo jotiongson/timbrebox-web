@@ -78,6 +78,11 @@ export default function VendorDashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCaption, setUploadCaption] = useState("Dead Wax / Matrix");
 
+  // --- NEW UI STATES ---
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
+  const [scanTab, setScanTab] = useState<'barcode' | 'catalog' | 'text'>('barcode');
+
   // --- AUTH & FETCH EFFECT ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -120,7 +125,7 @@ export default function VendorDashboard() {
     const { data, error } = await supabase
       .from("inventory")
       .select("id, artist, title, weight_grams, price_cents, market_price_cents, quantity, location, condition, year, genres, tracklist, identifiers, cover_image")
-      .eq("vendor_id", vendorId) // SECURE VENDOR FILTER
+      .eq("vendor_id", vendorId) 
       .order("id", { ascending: false });
 
     if (error) console.error("Error fetching inventory:", error);
@@ -148,7 +153,6 @@ export default function VendorDashboard() {
     const fileName = `${itemToEdit.id}_${Math.random()}.${fileExt}`;
     const filePath = `${session.user.id}/${fileName}`;
 
-    // 1. Upload the raw image file to the bucket
     const { error: uploadError } = await supabase.storage
       .from('record_gallery')
       .upload(filePath, file);
@@ -159,24 +163,22 @@ export default function VendorDashboard() {
       return;
     }
 
-    // 2. Get the public URL for the new image
     const { data: { publicUrl } } = supabase.storage
       .from('record_gallery')
       .getPublicUrl(filePath);
 
-    // 3. Link the image to the record in the database
     const { error: dbError } = await supabase
       .from('record_images')
       .insert([{
         record_id: itemToEdit.id,
         image_url: publicUrl,
-        caption: uploadCaption // <-- UPDATE THIS LINE
+        caption: uploadCaption 
       }]);
 
     if (dbError) {
       alert('Database link failed: ' + dbError.message);
     } else {
-      await fetchGalleryImages(itemToEdit.id); // Refresh the UI
+      await fetchGalleryImages(itemToEdit.id); 
     }
     
     setIsUploading(false);
@@ -196,7 +198,7 @@ export default function VendorDashboard() {
     setLookupError("");
 
     const payload = {
-      vendor_id: session.user.id, // REAL VENDOR ID
+      vendor_id: session.user.id, 
       title: dataToSave.title,
       artist: dataToSave.artist,
       price_cents: Math.round(parseFloat(dataToSave.price || "0") * 100),
@@ -300,8 +302,8 @@ export default function VendorDashboard() {
   function openEditModal(e: React.MouseEvent, album: InventoryItem) {
     e.stopPropagation(); 
     setItemToEdit(album);
-    setGalleryImages([]); // Clear out old gallery images
-    fetchGalleryImages(album.id); // Fetch the ones for this specific record
+    setGalleryImages([]); 
+    fetchGalleryImages(album.id); 
 
     setEditFormData({
       title: album.title,
@@ -323,15 +325,18 @@ export default function VendorDashboard() {
     setItemToEdit(null);
     setGalleryImages([]);
     setEditFormData({ ...initialFormState, location: formData.location });
+    setIsScannerModalOpen(false);
     setIsModalOpen(true);
   }
 
   const handlePipelineRouting = async (newRecordData: typeof initialFormState) => {
     if (autoSave && newRecordData.location) {
       await executeSave(newRecordData);
+      // Keep scanner open for the next rapid scan!
     } else {
       setItemToEdit(null);
       setEditFormData(newRecordData);
+      setIsScannerModalOpen(false);
       setIsModalOpen(true);
       if (!newRecordData.location) setLookupError("Auto-save paused: Please set a location first.");
     }
@@ -397,6 +402,8 @@ export default function VendorDashboard() {
   const handleRematchRelease = async (item: InventoryItem) => {
     setViewItem(null);
     setTextQuery(`${item.artist} ${item.title}`);
+    setIsScannerModalOpen(true);
+    setScanTab('text');
     setIsSearchingText(true);
     try {
       const response = await searchDiscogsByText(`${item.artist} ${item.title}`);
@@ -436,7 +443,10 @@ export default function VendorDashboard() {
           weight_grams: detectedWeight
         }).eq("id", viewItem.id);
         
-        if (!error) fetchInventory(session.user.id);
+        if (!error) {
+          fetchInventory(session.user.id);
+          setIsScannerModalOpen(false);
+        }
       } else {
         const newRecordData = {
           ...formData,
@@ -563,239 +573,70 @@ export default function VendorDashboard() {
         ))}
       </datalist>
 
-      {/* --- HEADER --- */}
-      <header className="border-b border-gray-200 pb-5 mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-5 w-full">
-        <div className="flex items-center gap-4 w-full md:w-auto min-w-0">
-          <div className="w-12 h-12 flex-shrink-0">
+      {/* --- NEW MINIMALIST HEADER --- */}
+      <header className="flex justify-between items-center w-full mb-8 pt-2">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 flex-shrink-0">
             <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-full h-full object-contain rounded-lg shadow-sm" />
           </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">TimbreBox</h1>
-            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">{storeName}</p>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight leading-none">TimbreBox</h1>
+            <p className="text-emerald-600 text-xs font-semibold mt-1 truncate">{storeName}</p>
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-2 sm:gap-4 w-full md:w-auto">
-          <a href="/vendor/settings" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">⚙️ Settings</a>
-          <a href="/" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">View Radar</a>
-          <button onClick={() => supabase.auth.signOut()} className="text-sm font-semibold text-red-500 hover:text-white transition border border-red-200 hover:bg-red-500 px-4 py-2 rounded-lg flex-1 text-center whitespace-nowrap">Sign Out</button>
+        {/* NEW PROFILE DROPDOWN */}
+        <div className="relative z-30">
+          <button 
+            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+            className="w-10 h-10 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full flex items-center justify-center text-lg transition shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            aria-label="Profile Menu"
+          >
+            👤
+          </button>
+          
+          {isProfileMenuOpen && (
+            <>
+              {/* Invisible overlay to close dropdown */}
+              <div className="fixed inset-0" onClick={() => setIsProfileMenuOpen(false)}></div>
+              
+              <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
+                <a href="/vendor/settings" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">
+                  ⚙️ Settings
+                </a>
+                <a href="/" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">
+                  📡 View Radar
+                </a>
+                <button 
+                  onClick={() => supabase.auth.signOut()} 
+                  className="px-5 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 text-left transition flex items-center gap-2"
+                >
+                  🚪 Sign Out
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </header>
 
-      {/* --- STREAMLINED SCANNING STATION --- */}
-      <section className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-10 w-full max-w-full overflow-hidden mt-8">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-gray-900 tracking-tight">Rapid Insertion Station</h2>
-          <button 
-            onClick={openManualAddModal}
-            className="text-sm font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition"
-          >
-            ✍️ Add Manually
-          </button>
-        </div>
-        
-        <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-4 items-end w-full">
-          
-          <div className="sm:col-span-2 md:col-span-4 bg-emerald-50 border-2 border-emerald-500 rounded-xl p-5 mb-2 shadow-sm w-full">
-            <label className="text-sm font-black text-emerald-900 uppercase tracking-widest flex items-center justify-between mb-2">
-              <span className="flex items-center gap-2">📍 Active Collector Location</span>
-              <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-1 rounded-md font-bold">REQUIRED FOR BATCH SCAN</span>
-            </label>
-            <div className="relative w-full">
-              <input 
-                type="text" 
-                name="location" 
-                list="location-options"
-                value={formData.location} 
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
-                className="w-full border border-emerald-300 rounded-lg pl-4 pr-12 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-4 focus:ring-emerald-500/30 bg-white placeholder:font-normal placeholder:text-gray-400" 
-                placeholder="e.g. Crate 1, Bin A, New Arrivals..." 
-              />
-            </div>
-          </div>
-
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-              <span>Barcode Lookup</span>
-              <span className="text-emerald-600 font-medium">Powered by Discogs</span>
-            </label>
-            <div className="flex gap-2 mt-1.5 w-full">
-              <div className="relative flex-1 min-w-0">
-                <input 
-                  type="text" 
-                  placeholder={!formData.location ? "Set location first..." : "Type UPC barcode here and press Enter..."} 
-                  value={barcode} 
-                  disabled={!formData.location || isSearchingDiscogs}
-                  onChange={(e) => setBarcode(e.target.value)} 
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
-                  className="w-full border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
-                />
-                {barcode && (
-                  <button 
-                    type="button" 
-                    onClick={() => setBarcode("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xs"
-                  >✕</button>
-                )}
-              </div>
-              <button 
-                type="button"
-                onClick={() => setShowScanner(true)}
-                disabled={!formData.location || isSearchingDiscogs}
-                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
-              >
-                {isSearchingDiscogs ? '⏳ ...' : '📷 Scan'}
-              </button>
-            </div>
-            
-            <div className="mt-3 flex items-center gap-2">
-              <input 
-                type="checkbox" 
-                id="autoSaveToggle"
-                checked={autoSave}
-                onChange={(e) => setAutoSave(e.target.checked)}
-                className="w-4 h-4 text-emerald-600 bg-white border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
-              />
-              <label htmlFor="autoSaveToggle" className="text-sm font-semibold text-gray-700 cursor-pointer">
-                Auto-Save on successful scan <span className="text-gray-400 font-normal">(Ignores manual review)</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-              <span>Catalog Number Lookup</span>
-              <span className="text-emerald-600 font-medium">Fast Manual Search</span>
-            </label>
-            <div className="flex gap-2 mt-1.5 w-full">
-              <div className="relative flex-1 min-w-0">
-                <input 
-                  type="text" 
-                  placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152 and press Enter..."} 
-                  value={catalog} 
-                  disabled={!formData.location || isSearchingDiscogs}
-                  onChange={(e) => setCatalog(e.target.value)} 
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
-                  className="w-full border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
-                />
-                {catalog && (
-                  <button 
-                    type="button" 
-                    onClick={() => setCatalog("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xs"
-                  >✕</button>
-                )}
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setShowCatalogScanner(true)}
-                disabled={!formData.location || isSearchingDiscogs}
-                className="flex-shrink-0 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg px-3 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-              >
-                📷 OCR
-              </button>
-              <button 
-                type="button" 
-                onClick={() => handleCatalogLookup(catalog)}
-                disabled={!formData.location || isSearchingDiscogs || !catalog}
-                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2 text-sm font-bold transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px]"
-              >
-                {isSearchingDiscogs ? '⏳' : 'Search'}
-              </button>
-            </div>
-          </div>
-
-          <div className="sm:col-span-2 md:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2 w-full min-w-0 overflow-hidden">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between">
-              <span>Text Search</span>
-              <span className="text-emerald-600 font-medium">Top 20 Matches</span>
-            </label>
-            <div className="flex gap-2 mt-1.5 w-full">
-              <div className="relative flex-1 min-w-0">
-                <input 
-                  type="text" 
-                  placeholder={!formData.location ? "Set location first..." : "e.g. Pink Floyd Dark Side"} 
-                  value={textQuery} 
-                  disabled={!formData.location || isSearchingText}
-                  onChange={(e) => setTextQuery(e.target.value)} 
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
-                  className="w-full border border-gray-300 rounded-lg pl-3 pr-16 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" 
-                />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  {textQuery && (
-                    <button 
-                      type="button" 
-                      onClick={() => setTextQuery("")}
-                      className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1"
-                    >✕</button>
-                  )}
-                  <button 
-                    type="button" 
-                    onClick={startVoiceSearch}
-                    disabled={!formData.location || isSearchingText}
-                    className={`p-1.5 rounded-md transition disabled:opacity-50 flex items-center justify-center ${
-                      isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-gray-400 hover:text-emerald-600 bg-gray-50'
-                    }`}
-                    title="Voice Search"
-                  >
-                    🎤
-                  </button>
-                </div>
-              </div>
-              <button 
-                type="button" 
-                onClick={handleTextSearch}
-                disabled={!formData.location || isSearchingText || !textQuery}
-                className="flex-shrink-0 bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 sm:px-6 py-2 text-sm font-bold transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSearchingText ? '...' : 'Search'}
-              </button>
-            </div>
-
-            {searchResults.length > 0 && (
-              <div className="mt-3 border border-gray-200 rounded-lg bg-white shadow-sm max-h-64 overflow-y-auto w-full">
-                {searchResults.map((res: any) => (
-                  <div 
-                    key={res.id} 
-                    onClick={() => handleSelectRelease(res.id)}
-                    className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
-                  >
-                    {res.thumb ? (
-                      <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded shadow-sm flex-shrink-0" />
-                    ) : (
-                      <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">
-                        {res.year || 'Unknown Year'} • {res.country || 'Unknown Region'}
-                      </p>
-                      <p className="text-xs text-gray-400 truncate mt-0.5">
-                        {res.label?.[0] || 'Unknown Label'} {res.catno ? `(${res.catno})` : ''}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {lookupError && (
-            <div className="sm:col-span-2 md:col-span-4 text-sm font-semibold text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100 w-full break-words">
-              {lookupError}
-            </div>
-          )}
-
-        </div>
+      {/* --- MASTER SCAN/ADD BUTTON --- */}
+      <section className="mb-6">
+        <button 
+          onClick={() => setIsScannerModalOpen(true)}
+          className="w-full bg-gray-900 hover:bg-emerald-600 text-white rounded-2xl py-4 shadow-[0_4px_20px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_20px_rgba(16,185,129,0.3)] transition-all duration-300 flex justify-center items-center gap-3 transform active:scale-[0.98]"
+        >
+          <span className="text-xl">➕</span>
+          <span className="font-black text-lg tracking-wide">Add / Scan Records</span>
+        </button>
       </section>
 
       {/* --- DYNAMIC CATEGORY FILTER BAR --- */}
-      <section className="mb-6">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+      <section className="mb-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <button 
             onClick={() => setSelectedCategory(null)}
-            className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition ${
-              !selectedCategory ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition flex-shrink-0 ${
+              !selectedCategory ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
           >
             All Items
@@ -804,8 +645,8 @@ export default function VendorDashboard() {
             <button 
               key={loc}
               onClick={() => setSelectedCategory(loc === selectedCategory ? null : loc)}
-              className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition ${
-                selectedCategory === loc ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition flex-shrink-0 ${
+                selectedCategory === loc ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
               }`}
             >
               {loc}
@@ -818,50 +659,51 @@ export default function VendorDashboard() {
       <div className="flex gap-2 mb-4">
         <button 
           onClick={() => setSortBy('date')} 
-          className={`px-3 py-1 text-xs font-bold rounded-lg transition ${sortBy === 'date' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${sortBy === 'date' ? 'bg-gray-200 text-gray-900' : 'bg-transparent text-gray-500 hover:bg-gray-100'}`}
         >
           Sort: Newest
         </button>
         <button 
           onClick={() => setSortBy('artist')} 
-          className={`px-3 py-1 text-xs font-bold rounded-lg transition ${sortBy === 'artist' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${sortBy === 'artist' ? 'bg-gray-200 text-gray-900' : 'bg-transparent text-gray-500 hover:bg-gray-100'}`}
         >
           Sort: Artist A-Z
         </button>
       </div>
 
       {/* --- INVENTORY LIST --- */}
-      <section className="mb-12 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <section className="mb-12 bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-4 sm:p-6 border-b border-gray-100 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className="text-lg font-bold text-gray-900 tracking-tight">Items List</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Showing {filteredInventory.length} of {categoryInventory.length} total records</p>
+            <h2 className="text-lg font-black text-gray-900 tracking-tight">Collection</h2>
+            <p className="text-xs font-semibold text-gray-400 mt-0.5">Showing {filteredInventory.length} of {categoryInventory.length}</p>
           </div>
           
           <div className="w-full sm:w-64 relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
             <input 
               type="text" 
-              placeholder="Search local vinyl records..." 
+              placeholder="Search local crates..." 
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              className="w-full pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-gray-50 transition"
             />
             {localSearch && (
               <button 
                 type="button" 
                 onClick={() => setLocalSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 font-bold text-xs"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 font-bold text-xs"
               >✕</button>
             )}
           </div>
         </div>
         
         {loading ? (
-          <div className="p-8 text-center text-gray-500 animate-pulse">Loading record data...</div>
+          <div className="p-12 text-center text-gray-400 font-bold animate-pulse">Loading collection...</div>
         ) : filteredInventory.length === 0 ? (
-          <div className="p-12 text-center">
-            <p className="text-gray-500 font-medium">No records found matching your search.</p>
+          <div className="p-16 text-center">
+            <div className="text-4xl mb-3 opacity-20">💿</div>
+            <p className="text-gray-500 font-bold">No records found.</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100 flex flex-col w-full">
@@ -869,49 +711,43 @@ export default function VendorDashboard() {
               <div 
                 key={album.id} 
                 onClick={() => setViewItem(album)} 
-                className="p-3 sm:p-4 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group cursor-pointer"
+                className="p-3 sm:p-5 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group cursor-pointer"
               >
                 {album.cover_image ? (
-                  <img src={album.cover_image} alt="cover" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded shadow-sm flex-shrink-0" />
+                  <img src={album.cover_image} alt="cover" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl shadow-sm flex-shrink-0" />
                 ) : (
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded flex items-center justify-center flex-shrink-0 border border-gray-200">
-                    <span className="text-sm opacity-40">💿</span>
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-gray-200">
+                    <span className="text-lg opacity-30">💿</span>
                   </div>
                 )}
                 
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className="flex justify-between items-end mb-0.5">
+                  <div className="flex justify-between items-start mb-0.5">
                     <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate pr-2">{album.title}</h3>
-                    <span className="font-bold text-emerald-600 text-sm sm:text-base flex-shrink-0">${(album.price_cents / 100).toFixed(2)}</span>
+                    <span className="font-black text-emerald-600 text-sm sm:text-base flex-shrink-0">${(album.price_cents / 100).toFixed(2)}</span>
                   </div>
                   
-                  <p className="text-gray-500 text-xs font-medium truncate mb-1.5">{album.artist}</p>
+                  <p className="text-gray-500 text-xs sm:text-sm font-medium truncate mb-1.5">{album.artist}</p>
                   
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {album.location ? (
-                       <span className="inline-flex items-center bg-gray-900 text-white text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">
+                       <span className="inline-flex items-center bg-gray-900 text-white text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">
                          📍 {album.location}
                        </span>
                     ) : (
-                       <span className="inline-flex items-center bg-red-50 text-red-600 border border-red-100 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">
+                       <span className="inline-flex items-center bg-red-50 text-red-600 border border-red-100 text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">
                          Unassigned
                        </span>
                     )}
-                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">{album.weight_grams}g</span>
-                    <span className="inline-block bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
-                    
-                    {album.market_price_cents && album.market_price_cents > 0 && (
-                      <span className="inline-block bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">
-                        Market: ${(album.market_price_cents / 100).toFixed(2)}
-                      </span>
-                    )}
+                    <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">{album.weight_grams}g</span>
+                    <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
                   </div>
                 </div>
 
                 <div className="flex-shrink-0 pl-2">
                    <button 
                      onClick={(e) => openEditModal(e, album)} 
-                     className="text-gray-400 hover:text-emerald-600 bg-gray-50 hover:bg-emerald-100 border border-gray-200 rounded p-2 transition focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                     className="text-gray-300 hover:text-emerald-600 bg-transparent hover:bg-emerald-50 rounded-lg p-2 transition focus:outline-none"
                      aria-label="Edit item"
                    >
                      ✏️
@@ -922,6 +758,205 @@ export default function VendorDashboard() {
           </div>
         )}
       </section>
+
+      {/* --- NEW: RAPID INSERTION SCANNER MODAL (ADDICTING COMMAND CENTER) --- */}
+      {isScannerModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4 sm:p-6">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden relative animate-fade-in flex flex-col max-h-[95vh]">
+            
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
+              <h3 className="font-black text-gray-900 text-xl tracking-tight">Add to Collection</h3>
+              <button 
+                onClick={() => setIsScannerModalOpen(false)}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
+              >✕</button>
+            </div>
+            
+            <div className="p-5 overflow-y-auto bg-gray-50 flex-1">
+              
+              {/* Mandatory Location Block */}
+              <div className="bg-white border-2 border-emerald-500 rounded-2xl p-4 mb-6 shadow-sm">
+                <label className="text-xs font-black text-emerald-800 uppercase tracking-widest flex items-center justify-between mb-2 pl-1">
+                  <span>📍 Active Location</span>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold">REQUIRED</span>
+                </label>
+                <input 
+                  type="text" 
+                  name="location" 
+                  list="location-options"
+                  value={formData.location} 
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
+                  className="w-full border-0 bg-emerald-50/50 rounded-xl px-4 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:font-normal placeholder:text-emerald-300" 
+                  placeholder="e.g. Crate 1, Bin A..." 
+                />
+              </div>
+
+              {/* Tab Selector */}
+              <div className="flex p-1 bg-gray-200 rounded-xl mb-5">
+                <button 
+                  onClick={() => setScanTab('barcode')} 
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'barcode' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                >📷 Barcode</button>
+                <button 
+                  onClick={() => setScanTab('catalog')} 
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'catalog' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                >📄 Catalog</button>
+                <button 
+                  onClick={() => setScanTab('text')} 
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'text' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                >⌨️ Search</button>
+              </div>
+
+              {/* Tab Content: Barcode */}
+              {scanTab === 'barcode' && (
+                <div className="animate-fade-in">
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder={!formData.location ? "Set location first..." : "Type UPC or tap scan..."} 
+                      value={barcode} 
+                      disabled={!formData.location || isSearchingDiscogs}
+                      onChange={(e) => setBarcode(e.target.value)} 
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowScanner(true)}
+                      disabled={!formData.location || isSearchingDiscogs}
+                      className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {isSearchingDiscogs ? '⏳' : '📷 Scan'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Content: Catalog */}
+              {scanTab === 'catalog' && (
+                <div className="animate-fade-in">
+                  <div className="flex gap-2 mb-2">
+                    <input 
+                      type="text" 
+                      placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152..."} 
+                      value={catalog} 
+                      disabled={!formData.location || isSearchingDiscogs}
+                      onChange={(e) => setCatalog(e.target.value)} 
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => handleCatalogLookup(catalog)}
+                      disabled={!formData.location || isSearchingDiscogs || !catalog}
+                      className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50"
+                    >
+                      {isSearchingDiscogs ? '⏳' : 'Search'}
+                    </button>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowCatalogScanner(true)}
+                    disabled={!formData.location || isSearchingDiscogs}
+                    className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl py-3 text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    📷 Use Camera OCR Reader
+                  </button>
+                </div>
+              )}
+
+              {/* Tab Content: Text Search */}
+              {scanTab === 'text' && (
+                <div className="animate-fade-in">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input 
+                        type="text" 
+                        placeholder={!formData.location ? "Set location first..." : "e.g. Pink Floyd Dark Side"} 
+                        value={textQuery} 
+                        disabled={!formData.location || isSearchingText}
+                        onChange={(e) => setTextQuery(e.target.value)} 
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
+                        className="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={startVoiceSearch}
+                        disabled={!formData.location || isSearchingText}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}
+                      >🎤</button>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={handleTextSearch}
+                      disabled={!formData.location || isSearchingText || !textQuery}
+                      className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50"
+                    >
+                      {isSearchingText ? '...' : 'Search'}
+                    </button>
+                  </div>
+
+                  {/* Search Results rendering right inside the tab */}
+                  {searchResults.length > 0 && (
+                    <div className="mt-4 border border-gray-200 rounded-xl bg-white shadow-sm max-h-60 overflow-y-auto w-full">
+                      {searchResults.map((res: any) => (
+                        <div 
+                          key={res.id} 
+                          onClick={() => handleSelectRelease(res.id)}
+                          className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
+                        >
+                          {res.thumb ? (
+                            <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded-lg shadow-sm flex-shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
+                            <p className="text-[10px] font-semibold text-gray-500 mt-0.5 truncate uppercase tracking-wider">
+                              {res.year || 'N/A'} • {res.country || 'N/A'} • {res.label?.[0] || 'Unknown'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Error Display */}
+              {lookupError && (
+                <div className="mt-4 text-xs font-bold text-red-600 bg-red-50 p-3 rounded-xl border border-red-100 text-center">
+                  {lookupError}
+                </div>
+              )}
+
+            </div>
+            
+            {/* Modal Footer Controls */}
+            <div className="p-4 border-t border-gray-100 bg-white flex justify-between items-center">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input 
+                  type="checkbox" 
+                  checked={autoSave}
+                  onChange={(e) => setAutoSave(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 bg-gray-100 border-gray-300 rounded focus:ring-emerald-500"
+                />
+                <span className="text-xs font-bold text-gray-600 group-hover:text-gray-900 transition">
+                  Auto-Save On Scan
+                </span>
+              </label>
+
+              <button 
+                onClick={openManualAddModal}
+                className="text-xs font-black text-gray-500 hover:text-emerald-700 transition"
+              >
+                ✍️ Add Manually
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* --- DETAILS VIEW MODAL --- */}
       {viewItem && (
@@ -990,8 +1025,6 @@ export default function VendorDashboard() {
                   </div>
                 </div>
               )}
-
-
 
             </div>
           </div>
@@ -1184,10 +1217,10 @@ export default function VendorDashboard() {
         </div>
       )}
 
-      {/* --- BARCODE SCANNER MODAL --- */}
+      {/* --- BARCODE SCANNER MODAL (Higher Z-Index to overlay Scanner Command Center) --- */}
       {showScanner && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-80 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative animate-fade-in">
             <button 
               onClick={() => setShowScanner(false)}
               className="absolute top-4 right-4 z-10 bg-gray-900 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow hover:bg-gray-700 transition"
@@ -1210,14 +1243,16 @@ export default function VendorDashboard() {
 
       {/* --- CATALOG OCR SCANNER MODAL --- */}
       {showCatalogScanner && (
-        <CatalogScanner 
-          onClose={() => setShowCatalogScanner(false)}
-          onDetected={async (text: string) => {
-            setCatalog(text); 
-            setShowCatalogScanner(false); 
-            await handleCatalogLookup(text); 
-          }}
-        />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-80 p-4 animate-fade-in">
+          <CatalogScanner 
+            onClose={() => setShowCatalogScanner(false)}
+            onDetected={async (text: string) => {
+              setCatalog(text); 
+              setShowCatalogScanner(false); 
+              await handleCatalogLookup(text); 
+            }}
+          />
+        </div>
       )}
 
     </main>
