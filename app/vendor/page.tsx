@@ -571,7 +571,7 @@ export default function VendorDashboard() {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">TimbreBox</h1>
-            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Vault Unlocked • {storeName}</p>
+            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">{storeName}</p>
           </div>
         </div>
         
