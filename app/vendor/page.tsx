@@ -73,6 +73,10 @@ export default function VendorDashboard() {
   const [lookupError, setLookupError] = useState("");
   const [showScanner, setShowScanner] = useState(false);
 
+  // --- NEW GALLERY STATES ---
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
   // --- AUTH & FETCH EFFECT ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -122,6 +126,69 @@ export default function VendorDashboard() {
     else setInventory(data || []);
     setLoading(false);
   }
+
+  // --- GALLERY IMAGE FUNCTIONS ---
+  async function fetchGalleryImages(recordId: number) {
+    const { data } = await supabase
+      .from('record_images')
+      .select('*')
+      .eq('record_id', recordId)
+      .order('created_at', { ascending: true });
+    
+    setGalleryImages(data || []);
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0 || !itemToEdit) return;
+    const file = e.target.files[0];
+    setIsUploading(true);
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${itemToEdit.id}_${Math.random()}.${fileExt}`;
+    const filePath = `${session.user.id}/${fileName}`;
+
+    // 1. Upload the raw image file to the bucket
+    const { error: uploadError } = await supabase.storage
+      .from('record_gallery')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      alert('Camera upload failed: ' + uploadError.message);
+      setIsUploading(false);
+      return;
+    }
+
+    // 2. Get the public URL for the new image
+    const { data: { publicUrl } } = supabase.storage
+      .from('record_gallery')
+      .getPublicUrl(filePath);
+
+    // 3. Link the image to the record in the database
+    const { error: dbError } = await supabase
+      .from('record_images')
+      .insert([{
+        record_id: itemToEdit.id,
+        image_url: publicUrl,
+        caption: "High-Res Scan"
+      }]);
+
+    if (dbError) {
+      alert('Database link failed: ' + dbError.message);
+    } else {
+      await fetchGalleryImages(itemToEdit.id); // Refresh the UI
+    }
+    
+    setIsUploading(false);
+  };
+
+  const handleDeleteImage = async (imageId: string) => {
+    const confirmDelete = window.confirm("Delete this photo?");
+    if (!confirmDelete) return;
+
+    await supabase.from('record_images').delete().eq('id', imageId);
+    setGalleryImages(galleryImages.filter(img => img.id !== imageId));
+  };
+
 
   const executeSave = async (dataToSave: typeof initialFormState) => {
     setIsUpdating(true);
@@ -232,6 +299,9 @@ export default function VendorDashboard() {
   function openEditModal(e: React.MouseEvent, album: InventoryItem) {
     e.stopPropagation(); 
     setItemToEdit(album);
+    setGalleryImages([]); // Clear out old gallery images
+    fetchGalleryImages(album.id); // Fetch the ones for this specific record
+
     setEditFormData({
       title: album.title,
       artist: album.artist,
@@ -250,6 +320,7 @@ export default function VendorDashboard() {
 
   function openManualAddModal() {
     setItemToEdit(null);
+    setGalleryImages([]);
     setEditFormData({ ...initialFormState, location: formData.location });
     setIsModalOpen(true);
   }
@@ -478,7 +549,7 @@ export default function VendorDashboard() {
 
   if (!session && !isAuthLoading) {
     router.push('/login');
-    return null; // Stop rendering here
+    return null; 
   }
 
   return (
@@ -499,7 +570,7 @@ export default function VendorDashboard() {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">TimbreBox</h1>
-            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">{storeName}</p>
+            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Vault Unlocked • {storeName}</p>
           </div>
         </div>
         
@@ -1029,6 +1100,48 @@ export default function VendorDashboard() {
                   </div>
                 </div>
                </form>
+
+               {/* --- HI-RES CAMERA GALLERY UPLOADER --- */}
+               {itemToEdit && (
+                 <div className="mt-6 border-t border-gray-100 pt-5">
+                   <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                     📷 High-Res Camera Roll
+                   </h4>
+                   <p className="text-xs text-gray-500 mb-4 leading-tight">
+                     Snap photos of the dead wax matrix, center labels, or specific sleeve damage. These will appear in the public Inspector Modal.
+                   </p>
+                   
+                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                     {galleryImages.map(img => (
+                       <div key={img.id} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200 group">
+                         <img src={img.image_url} alt="Gallery item" className="w-full h-full object-cover" />
+                         <button 
+                           type="button" 
+                           onClick={() => handleDeleteImage(img.id)} 
+                           className="absolute top-1.5 right-1.5 bg-gray-900/80 hover:bg-red-500 text-white rounded-full w-7 h-7 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition backdrop-blur-sm"
+                         >✕</button>
+                       </div>
+                     ))}
+
+                     <label className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-emerald-400 hover:text-emerald-600 cursor-pointer transition">
+                       {/* THE MAGIC TRICK: capture="environment" opens the rear camera immediately on mobile */}
+                       <input 
+                         type="file" 
+                         accept="image/*" 
+                         capture="environment" 
+                         onChange={handleImageUpload} 
+                         className="hidden" 
+                         disabled={isUploading} 
+                       />
+                       <span className="text-2xl mb-1">{isUploading ? '⏳' : '➕'}</span>
+                       <span className="text-[10px] font-bold uppercase tracking-wider text-center px-1">
+                         {isUploading ? 'Uploading...' : 'Take Photo'}
+                       </span>
+                     </label>
+                   </div>
+                 </div>
+               )}
+
             </div>
 
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-2 sm:gap-3">
