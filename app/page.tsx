@@ -67,10 +67,21 @@ export default function PublicRadar() {
       });
 
       if (error) throw error;
-      setStores(data || []);
+      
+      // 🚀 THE BULLETPROOF FILTER:
+      // 1. Strip out any records where price is 0 or less
+      // 2. Hide any stores that have 0 records left to sell
+      const filteredStores = (data || [])
+        .map((store: Store) => ({
+          ...store,
+          active_records: store.active_records.filter(record => record.price_cents > 0)
+        }))
+        .filter((store: Store) => store.active_records.length > 0);
+
+      setStores(filteredStores);
     } catch (err: any) {
       console.error('Radar failure:', err.message);
-      setErrorMsg('Supabase Error: ' + err.message); // <-- This will print the real error
+      setErrorMsg('Supabase Error: ' + err.message); 
     } finally {
       setScanning(false);
     }
