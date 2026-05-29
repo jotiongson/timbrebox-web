@@ -13,6 +13,7 @@ interface VinylRecord {
   condition: string;
   quantity: number;
   location?: string;
+  cover_image?: string; // Prepared for future image support
 }
 
 interface Store {
@@ -28,6 +29,9 @@ export default function PublicRadar() {
   const [scanning, setScanning] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  
+  // NEW STATE: Tracks which record the user is currently inspecting
+  const [inspectingRecord, setInspectingRecord] = useState<VinylRecord | null>(null);
 
   // 1. The Radar Ping
   const handleScanRadar = () => {
@@ -125,7 +129,7 @@ export default function PublicRadar() {
                     onClick={() => setSelectedStore(store)}
                     className="text-emerald-600 font-bold text-sm hover:text-emerald-700 transition flex items-center gap-1"
                   >
-                    Open Crate →
+                    Browse Collection →
                   </button>
                 </div>
               </div>
@@ -140,9 +144,9 @@ export default function PublicRadar() {
         )}
       </section>
 
-      {/* THE CRATE MODAL (Frictionless Browsing) */}
+      {/* THE COLLECTION MODAL */}
       {selectedStore && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
@@ -161,7 +165,7 @@ export default function PublicRadar() {
             {/* Modal Inventory List */}
             <div className="p-6 overflow-y-auto bg-white flex-1">
               {selectedStore.active_records.length === 0 ? (
-                <p className="text-center text-gray-400 italic">This crate is currently empty.</p>
+                <p className="text-center text-gray-400 italic">This collection is currently empty.</p>
               ) : (
                 <div className="space-y-4">
                   {selectedStore.active_records.map((record) => (
@@ -173,17 +177,16 @@ export default function PublicRadar() {
                             <span className="text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{record.weight_grams}g</span>
                             <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Grade: {record.condition || 'New'}</span>
                             <span className="text-[10px] uppercase tracking-wider font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Qty: {record.quantity}</span>
-                            {/* NEW LOCATION TAG */}
-                            {record.location && (
-                              <span className="text-[10px] uppercase tracking-wider font-bold bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
-                                Loc: {record.location}
-                              </span>
-                            )}
                           </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-lg text-emerald-600">${(record.price_cents / 100).toFixed(2)}</div>
-                        <button className="mt-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition">Reserve</button>
+                        <div className="font-bold text-lg text-emerald-600 mb-2">${(record.price_cents / 100).toFixed(2)}</div>
+                        <button 
+                          onClick={() => setInspectingRecord(record)}
+                          className="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow-sm"
+                        >
+                          Inspect Record
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -193,6 +196,94 @@ export default function PublicRadar() {
           </div>
         </div>
       )}
+
+      {/* --- NEW: THE RECORD INSPECTOR MODAL --- */}
+      {inspectingRecord && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-8">
+          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row shadow-2xl overflow-hidden animate-fade-in relative">
+            
+            {/* Close Button (Absolute positioned for overlay effect) */}
+            <button 
+              onClick={() => setInspectingRecord(null)}
+              className="absolute top-4 right-4 z-10 bg-white/90 hover:bg-white text-gray-900 rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-lg transition"
+            >
+              ✕
+            </button>
+
+            {/* Left Column: Album Art */}
+            <div className="md:w-5/12 bg-gray-100 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-gray-200 min-h-[250px]">
+              {inspectingRecord.cover_image ? (
+                <img src={inspectingRecord.cover_image} alt="Album Cover" className="w-full h-auto object-cover rounded-xl shadow-lg" />
+              ) : (
+                <div className="text-center">
+                  <div className="text-8xl mb-4 opacity-30">💿</div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No Cover Scan</p>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Specs & Collector's Corner */}
+            <div className="md:w-7/12 p-6 md:p-8 overflow-y-auto bg-white flex flex-col">
+              
+              {/* Header Info */}
+              <div className="mb-6">
+                <h3 className="text-3xl font-black text-gray-900 leading-tight tracking-tight mb-1">{inspectingRecord.title}</h3>
+                <p className="text-lg font-medium text-gray-500">{inspectingRecord.artist}</p>
+              </div>
+
+              {/* Core Specs Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-8">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                  <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-1">Asking Price</p>
+                  <p className="text-2xl font-black text-emerald-600">${(inspectingRecord.price_cents / 100).toFixed(2)}</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Media Grade</p>
+                  <p className="text-2xl font-black text-gray-900">{inspectingRecord.condition || 'Unknown'}</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Vinyl Weight</p>
+                  <p className="text-lg font-bold text-gray-900">{inspectingRecord.weight_grams}g</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Availability</p>
+                  <p className="text-lg font-bold text-gray-900">{inspectingRecord.quantity} in stock</p>
+                </div>
+              </div>
+
+              {/* The Collector's Corner */}
+              <div className="mt-auto border-t border-gray-200 pt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="bg-gray-900 text-white text-[10px] uppercase tracking-widest font-black px-2 py-1 rounded">Collector's Corner</span>
+                  <span className="text-xs font-semibold text-gray-400">Matrix & Pressing Details</span>
+                </div>
+                
+                <div className="bg-gray-900 rounded-xl p-5 text-left border border-gray-800 shadow-inner">
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Identifiers</p>
+                      <p className="text-sm font-mono text-gray-300">Awaiting Upload</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Pressing/Year</p>
+                      <p className="text-sm font-mono text-gray-300">Awaiting Upload</p>
+                    </div>
+                  </div>
+                  
+                  {/* Future Photo Gallery Placeholder */}
+                  <div className="w-full h-24 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-500 bg-gray-800/50">
+                    <span className="text-xl mb-1">🔍</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Dead Wax / Artwork Gallery</span>
+                    <span className="text-[9px] text-gray-600 mt-1">Photos coming soon</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
