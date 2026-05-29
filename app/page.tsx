@@ -311,7 +311,10 @@ export default function PublicRadar() {
                       <span className="text-[10px] font-bold uppercase tracking-widest">Awaiting Verification Photos</span>
                     </div>
                   ) : (
-                    <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory style={{ scrollbarWidth: 'none' }}">
+                    <div 
+                      className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory" 
+                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
                       {galleryImages.map((img, i) => (
                         <div key={img.id} className="flex-shrink-0 w-32 h-32 sm:w-40 sm:h-40 snap-center rounded-lg overflow-hidden border border-gray-700 bg-gray-800 relative group">
                           <img src={img.image_url} alt={`Gallery view ${i+1}`} className="w-full h-full object-cover" />
@@ -322,36 +325,6 @@ export default function PublicRadar() {
                               {img.caption || 'Gallery Photo'}
                             </span>
                           </div>
-                          
-                          {/* Hover Overlay for High-Res Viewing */}
-                          <a 
-                            href={img.image_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition cursor-pointer"
-                          >
-                            <span className="text-white text-xs font-bold uppercase tracking-wider bg-gray-900/80 px-3 py-1.5 rounded-full border border-gray-600">
-                              🔍 Full Size
-                            </span>
-                          </a>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-                  
-                  {/* DYNAMIC SWIPEABLE GALLERY */}
-                  {galleryImages.length === 0 ? (
-                    <div className="w-full h-24 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-500 bg-gray-800/50">
-                      <span className="text-xl mb-1">🔍</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest">No Additional Photos</span>
-                    </div>
-                  ) : (
-                    <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory style={{ scrollbarWidth: 'none' }}">
-                      {galleryImages.map((img, i) => (
-                        <div key={img.id} className="flex-shrink-0 w-32 h-32 sm:w-40 sm:h-40 snap-center rounded-lg overflow-hidden border border-gray-700 bg-gray-800 relative group">
-                          <img src={img.image_url} alt={`Gallery view ${i+1}`} className="w-full h-full object-cover" />
                           
                           {/* Hover Overlay for High-Res Viewing */}
                           <a 
