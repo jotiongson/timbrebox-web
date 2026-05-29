@@ -76,6 +76,7 @@ export default function VendorDashboard() {
   // --- NEW GALLERY STATES ---
   const [galleryImages, setGalleryImages] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadCaption, setUploadCaption] = useState("Dead Wax / Matrix");
 
   // --- AUTH & FETCH EFFECT ---
   useEffect(() => {
@@ -169,7 +170,7 @@ export default function VendorDashboard() {
       .insert([{
         record_id: itemToEdit.id,
         image_url: publicUrl,
-        caption: "High-Res Scan"
+        caption: uploadCaption // <-- UPDATE THIS LINE
       }]);
 
     if (dbError) {
@@ -1104,17 +1105,37 @@ export default function VendorDashboard() {
                {/* --- HI-RES CAMERA GALLERY UPLOADER --- */}
                {itemToEdit && (
                  <div className="mt-6 border-t border-gray-100 pt-5">
-                   <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                     📷 High-Res Camera Roll
-                   </h4>
-                   <p className="text-xs text-gray-500 mb-4 leading-tight">
-                     Snap photos of the dead wax matrix, center labels, or specific sleeve damage. These will appear in the public Inspector Modal.
-                   </p>
+                   <div className="flex justify-between items-end mb-3">
+                     <div>
+                       <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">📷 High-Res Camera Roll</h4>
+                       <p className="text-xs text-gray-500 leading-tight mt-1">Snap photos of specific details for buyers to verify.</p>
+                     </div>
+                     
+                     {/* THE NEW PHOTO TAG DROPDOWN */}
+                     <select 
+                       value={uploadCaption}
+                       onChange={(e) => setUploadCaption(e.target.value)}
+                       className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                     >
+                       <option value="Dead Wax / Matrix">Dead Wax / Matrix</option>
+                       <option value="Center Label">Center Label</option>
+                       <option value="Front Cover">Front Cover</option>
+                       <option value="Back Cover">Back Cover</option>
+                       <option value="Damage / Wear">Damage / Wear</option>
+                       <option value="Inserts / Extras">Inserts / Extras</option>
+                     </select>
+                   </div>
                    
                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                      {galleryImages.map(img => (
                        <div key={img.id} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200 group">
                          <img src={img.image_url} alt="Gallery item" className="w-full h-full object-cover" />
+                         
+                         {/* CAPTION OVERLAY OVER VENDOR IMAGES */}
+                         <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                           <p className="text-[8px] text-white font-bold uppercase tracking-wider text-center truncate">{img.caption}</p>
+                         </div>
+
                          <button 
                            type="button" 
                            onClick={() => handleDeleteImage(img.id)} 
@@ -1124,7 +1145,6 @@ export default function VendorDashboard() {
                      ))}
 
                      <label className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-emerald-400 hover:text-emerald-600 cursor-pointer transition">
-                       {/* THE MAGIC TRICK: capture="environment" opens the rear camera immediately on mobile */}
                        <input 
                          type="file" 
                          accept="image/*" 
