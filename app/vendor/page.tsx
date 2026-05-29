@@ -732,7 +732,9 @@ export default function VendorDashboard() {
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
                   <div className="flex justify-between items-start mb-0.5">
                     <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate pr-2">{album.title}</h3>
-                    <span className="font-black text-emerald-600 text-sm sm:text-base flex-shrink-0">${(album.price_cents / 100).toFixed(2)}</span>
+                    <span className={`text-sm sm:text-base flex-shrink-0 ${album.price_cents > 0 ? 'font-black text-emerald-600' : 'font-medium text-gray-400'}`}>
+                      ${(album.price_cents / 100).toFixed(2)}
+                    </span>
                   </div>
                   
                   <p className="text-gray-500 text-xs sm:text-sm font-medium truncate mb-1.5">{album.artist}</p>
@@ -898,19 +900,14 @@ export default function VendorDashboard() {
                         disabled={!formData.location || isSearchingText}
                         onChange={(e) => setTextQuery(e.target.value)} 
                         onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
-                        className="w-full border border-gray-200 rounded-xl pl-4 pr-16 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
+                        className="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
                       />
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                        {textQuery && !isListening && (
-                          <button type="button" onClick={() => setTextQuery("")} className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1">✕</button>
-                        )}
-                        <button 
-                          type="button" 
-                          onClick={() => startVoiceSearch('text')}
-                          disabled={!formData.location || isSearchingText}
-                          className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}
-                        >🎤</button>
-                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => startVoiceSearch('text')}
+                        disabled={!formData.location || isSearchingText}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}
+                      >🎤</button>
                     </div>
                     <button 
                       type="button" 
@@ -1019,9 +1016,9 @@ export default function VendorDashboard() {
               </div>
 
               <div className="flex gap-4">
-                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex-1">
-                  <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Your Price</p>
-                  <p className="text-2xl font-black text-emerald-600">${(viewItem.price_cents / 100).toFixed(2)}</p>
+                <div className={`border rounded-xl p-4 flex-1 ${viewItem.price_cents > 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-gray-50 border-gray-200'}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wider ${viewItem.price_cents > 0 ? 'text-emerald-800' : 'text-gray-500'}`}>Your Price</p>
+                  <p className={`text-2xl ${viewItem.price_cents > 0 ? 'font-black text-emerald-600' : 'font-medium text-gray-400'}`}>${(viewItem.price_cents / 100).toFixed(2)}</p>
                 </div>
                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex-1">
                   <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Market Est.</p>
