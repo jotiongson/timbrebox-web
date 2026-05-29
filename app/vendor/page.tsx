@@ -17,7 +17,7 @@ interface InventoryItem {
   status?: string;
   quantity?: number;
   location?: string;
-  condition: "VG+",
+  condition: "VG+";
   year?: string;
   genres?: string[];
   tracklist?: any[];
@@ -43,6 +43,7 @@ export default function VendorDashboard() {
   // --- NEW AUTH STATES ---
   const [session, setSession] = useState<any>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [storeName, setStoreName] = useState("Your Store");
   
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +80,7 @@ export default function VendorDashboard() {
       setIsAuthLoading(false);
       if (session) {
         fetchInventory(session.user.id);
+        fetchStoreProfile(session.user.id);
       }
     });
 
@@ -86,13 +88,27 @@ export default function VendorDashboard() {
       setSession(session);
       if (session) {
         fetchInventory(session.user.id);
+        fetchStoreProfile(session.user.id);
       } else {
         setInventory([]);
+        setStoreName("Your Store");
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  async function fetchStoreProfile(userId: string) {
+    const { data } = await supabase
+      .from("vendor_profiles")
+      .select("store_name")
+      .eq("id", userId)
+      .single();
+    
+    if (data && data.store_name) {
+      setStoreName(data.store_name);
+    }
+  }
 
   async function fetchInventory(vendorId: string) {
     setLoading(true);
@@ -458,12 +474,12 @@ export default function VendorDashboard() {
     return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Unlocking Account...</div>;
   }
 
-const router = useRouter();
+  const router = useRouter();
 
-if (!session && !isAuthLoading) {
-  router.push('/login');
-  return null; // Stop rendering here
-}
+  if (!session && !isAuthLoading) {
+    router.push('/login');
+    return null; // Stop rendering here
+  }
 
   return (
     <main className="p-4 sm:p-8 w-full max-w-full overflow-x-hidden mx-auto font-sans relative animate-fade-in pb-20">
@@ -483,7 +499,7 @@ if (!session && !isAuthLoading) {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight truncate">TimbreBox</h1>
-            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Account • {store.store_name}</p>
+            <p className="text-emerald-600 text-sm mt-1 font-semibold truncate">Vault Unlocked • {storeName}</p>
           </div>
         </div>
         
@@ -960,6 +976,17 @@ if (!session && !isAuthLoading) {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Your Price ($) <span className="text-red-500">*</span></label>
+                    <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-emerald-600 uppercase tracking-wider pl-1">Discogs Lowest ($)</label>
+                    <input type="number" name="market_price" readOnly value={editFormData.market_price} className="w-full mt-1.5 border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="N/A" />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Weight (g)</label>
@@ -984,17 +1011,6 @@ if (!session && !isAuthLoading) {
                       <option value="VG">VG (Very Good)</option>
                       <option value="G">G (Good)</option>
                     </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Your Price ($) <span className="text-red-500">*</span></label>
-                    <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-emerald-600 uppercase tracking-wider pl-1">Discogs Lowest ($)</label>
-                    <input type="number" name="market_price" readOnly value={editFormData.market_price} className="w-full mt-1.5 border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="N/A" />
                   </div>
                 </div>
 
