@@ -361,7 +361,7 @@ export default function VendorDashboard() {
         market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
         weight: result.weight || "120",
         quantity: "1",
-        location: formData.location, // Safely locked to global active location
+        location: formData.location, 
         cover_image: result.cover_image || "",
         tracklist: result.tracklist || [],
         identifiers: result.identifiers || []
@@ -389,7 +389,7 @@ export default function VendorDashboard() {
         market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
         weight: result.weight || "120",
         quantity: "1",
-        location: formData.location, // Safely locked to global active location
+        location: formData.location, 
         cover_image: result.cover_image || "",
         tracklist: result.tracklist || [],
         identifiers: result.identifiers || []
@@ -402,12 +402,18 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false);
   };
 
+  // --- UPGRADED: RE-MATCH CARRIES FORWARD LOCATION INFO INTO THE MODAL POPUP ---
   const handleRematchRelease = async (item: InventoryItem) => {
     setViewItem(null);
+    
+    // 1. Sync the active layout location state to match the record's existing bin assignment
+    setFormData(prev => ({ ...prev, location: item.location || "" }));
+    
     setTextQuery(`${item.artist} ${item.title}`);
     setIsScannerModalOpen(true);
     setScanTab('text');
     setIsSearchingText(true);
+    
     try {
       const response = await searchDiscogsByText(`${item.artist} ${item.title}`);
       if (response && response.success && response.results) {
@@ -419,10 +425,9 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  // --- STRICT LOCATION PROTECTED PREVIEW ACTIVATION ---
   const handleTogglePreview = async (releaseId: number) => {
     if (!formData.location.trim()) {
-      return; // Absolute safety guard
+      return; 
     }
 
     if (previewReleaseId === releaseId) {
@@ -445,7 +450,7 @@ export default function VendorDashboard() {
     setIsFetchingPreview(false);
   };
 
-  // --- COMMIT FUNCTION FROM PREVIEW INSIDE POPUP ---
+  // --- UPGRADED: COMMITTING CLOSES ALL POPUPS IMMEDIATELY ---
   const handleSelectFromPreview = async () => {
     if (!previewDetails) return;
 
@@ -469,11 +474,15 @@ export default function VendorDashboard() {
       
       if (!error) {
         fetchInventory(session.user.id);
+        // Clean close sequence
         setIsScannerModalOpen(false);
+        setPreviewReleaseId(null);
+        setPreviewDetails(null);
+        setSearchResults([]);
       }
     } else {
       const newRecordData = {
-        ...formData, // Inherits the guaranteed active location safely
+        ...formData, 
         artist: previewDetails.artist,
         title: previewDetails.title,
         price: "0",
@@ -484,12 +493,15 @@ export default function VendorDashboard() {
         tracklist: previewDetails.tracklist || [],
         identifiers: previewDetails.identifiers || []
       };
-      await handlePipelineRouting(newRecordData);
+      
+      await executeSave(newRecordData); // Run direct save sequence
+      
+      // Clean close sequence right back to the master dashboard page
+      setIsScannerModalOpen(false);
+      setPreviewReleaseId(null);
+      setPreviewDetails(null);
+      setSearchResults([]);
     }
-    
-    setSearchResults([]);
-    setPreviewReleaseId(null);
-    setPreviewDetails(null);
   };
 
   const startVoiceSearch = (targetTab: 'text' | 'catalog') => {
@@ -622,7 +634,7 @@ export default function VendorDashboard() {
           {isProfileMenuOpen && (
             <>
               <div className="fixed inset-0" onClick={() => setIsProfileMenuOpen(false)}></div>
-              <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
+              <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
                 <a href="/vendor/settings" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">⚙️ Settings</a>
                 <a href="/" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">📡 View Radar</a>
                 <button onClick={() => supabase.auth.signOut()} className="px-5 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 text-left transition flex items-center gap-2">🚪 Sign Out</button>
@@ -836,7 +848,6 @@ export default function VendorDashboard() {
                     </button>
                   </div>
 
-                  {/* --- CONDENSED TARGETED EYE VIEWER --- */}
                   {searchResults.length > 0 && (
                     <div className="mt-4 border border-gray-200 rounded-xl bg-white shadow-sm max-h-80 overflow-y-auto w-full divide-y divide-gray-100">
                       {searchResults.map((res: any) => {
@@ -858,7 +869,6 @@ export default function VendorDashboard() {
                                 </p>
                               </div>
                               
-                              {/* SINGLE TARGET INSPECT ICON WITH BLANK LOCATION PROTECTION */}
                               <div className="flex-shrink-0 pl-1">
                                 <button 
                                   type="button" 
