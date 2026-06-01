@@ -40,7 +40,7 @@ const initialFormState = {
 };
 
 export default function VendorDashboard() {
-  // --- NEW AUTH STATES ---
+  // --- AUTH STATES ---
   const [session, setSession] = useState<any>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [storeName, setStoreName] = useState("Your Store");
@@ -73,15 +73,20 @@ export default function VendorDashboard() {
   const [lookupError, setLookupError] = useState("");
   const [showScanner, setShowScanner] = useState(false);
 
-  // --- NEW GALLERY STATES ---
+  // --- GALLERY STATES ---
   const [galleryImages, setGalleryImages] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCaption, setUploadCaption] = useState("Dead Wax / Matrix");
 
-  // --- NEW UI STATES ---
+  // --- UI STATES ---
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [scanTab, setScanTab] = useState<'barcode' | 'catalog' | 'text'>('barcode');
+
+  // --- NEW: LAZY LOADING PREVIEW STATES ---
+  const [previewReleaseId, setPreviewReleaseId] = useState<number | null>(null);
+  const [previewDetails, setPreviewDetails] = useState<any | null>(null);
+  const [isFetchingPreview, setIsFetchingPreview] = useState(false);
 
   // --- AUTH & FETCH EFFECT ---
   useEffect(() => {
@@ -191,7 +196,6 @@ export default function VendorDashboard() {
     await supabase.from('record_images').delete().eq('id', imageId);
     setGalleryImages(galleryImages.filter(img => img.id !== imageId));
   };
-
 
   const executeSave = async (dataToSave: typeof initialFormState) => {
     setIsUpdating(true);
@@ -332,7 +336,6 @@ export default function VendorDashboard() {
   const handlePipelineRouting = async (newRecordData: typeof initialFormState) => {
     if (autoSave && newRecordData.location) {
       await executeSave(newRecordData);
-      // Keep scanner open for the next rapid scan!
     } else {
       setItemToEdit(null);
       setEditFormData(newRecordData);
@@ -416,62 +419,101 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  const handleSelectRelease = async (id: number) => {
-    setIsSearchingDiscogs(true);
-    const result = await getDiscogsReleaseDetails(id);
-
-    if (result?.success) {
-      const descriptionsString = result.formats?.[0]?.descriptions?.join(" ") || "";
-      let detectedWeight = 120; 
-
-      if (descriptionsString.includes("200g")) {
-        detectedWeight = 200;
-      } else if (descriptionsString.includes("180g")) {
-        detectedWeight = 180;
-      } else if (result.weight) {
-        detectedWeight = parseInt(result.weight);
-      }
-
-      if (viewItem) {
-        const { error } = await supabase.from("inventory").update({
-          title: result.title,
-          artist: result.artist,
-          cover_image: result.cover_image,
-          tracklist: result.tracklist,
-          identifiers: result.identifiers,
-          market_price_cents: result.market_price ? Math.round(parseFloat(result.market_price) * 100) : 0,
-          weight_grams: detectedWeight
-        }).eq("id", viewItem.id);
-        
-        if (!error) {
-          fetchInventory(session.user.id);
-          setIsScannerModalOpen(false);
-        }
-      } else {
-        const newRecordData = {
-          ...formData,
-          artist: result.artist,
-          title: result.title,
-          price: "0",
-          market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
-          weight: detectedWeight.toString(),
-          quantity: "1",
-          location: formData.location,
-          cover_image: result.cover_image || "",
-          tracklist: result.tracklist || [],
-          identifiers: result.identifiers || []
-        };
-        await handlePipelineRouting(newRecordData);
-      }
-    } else {
-      alert(result?.error || "Failed to fetch album details.");
+  // --- NEW: FETCH ONE SINGLE RECORD FOR LAZY PREVIEW (SAVES RATE LIMIT) ---
+  const handleTogglePreview = async (releaseId: number) => {
+    if (previewReleaseId === releaseId) {
+      // Toggle off if clicked again
+      setPreviewReleaseId(null);
+      setPreviewDetails(null);
+      return;
     }
-    
-    setSearchResults([]); 
-    setIsSearchingDiscogs(false); 
+
+    setPreviewReleaseId(releaseId);
+    setPreviewDetails(null);
+    setIsFetchingPreview(true);
+
+    const result = await getDiscogsReleaseDetails(releaseId);
+    if (result?.success) {
+      setPreviewDetails(result);
+    } else {
+      alert("Could not fetch preview: " + (result?.error || "Unknown Error"));
+      setPreviewReleaseId(null);
+    }
+    setIsFetchingPreview(false);
   };
 
-  // --- UPGRADED MULTI-TARGET VOICE SEARCH ---
+  // --- NEW: DIRECT RAPID SELECT BUTTON (ZERO EXTRA API OVERHEAD) ---
+  const handleDirectSelect = async (shallowResult: any) => {
+    // Splits artist and title out safely from Discogs composite format
+    const titleParts = shallowResult.title.split(' - ');
+    const detectedArtist = titleParts[0]?.trim() || "Unknown Artist";
+    const detectedTitle = titleParts[1]?.trim() || titleParts[0]?.trim() || "Unknown Title";
+
+    const newRecordData = {
+      ...formData,
+      artist: detectedArtist,
+      title: detectedTitle,
+      price: "0",
+      market_price: "", // Bypassed intentionally to avoid secondary API execution
+      weight: "120",
+      quantity: "1",
+      location: formData.location,
+      cover_image: shallowResult.thumb || "",
+      tracklist: [],
+      identifiers: []
+    };
+
+    await handlePipelineRouting(newRecordData);
+  };
+
+  // Triggered from inside the preview sheet if they like what they see
+  const handleSelectFromPreview = async () => {
+    if (!previewDetails) return;
+
+    const descriptionsString = previewDetails.formats?.[0]?.descriptions?.join(" ") || "";
+    let detectedWeight = 120; 
+
+    if (descriptionsString.includes("200g")) detectedWeight = 200;
+    else if (descriptionsString.includes("180g")) detectedWeight = 180;
+    else if (previewDetails.weight) detectedWeight = parseInt(previewDetails.weight);
+
+    if (viewItem) {
+      const { error } = await supabase.from("inventory").update({
+        title: previewDetails.title,
+        artist: previewDetails.artist,
+        cover_image: previewDetails.cover_image,
+        tracklist: previewDetails.tracklist,
+        identifiers: previewDetails.identifiers,
+        market_price_cents: previewDetails.market_price ? Math.round(parseFloat(previewDetails.market_price) * 100) : 0,
+        weight_grams: detectedWeight
+      }).eq("id", viewItem.id);
+      
+      if (!error) {
+        fetchInventory(session.user.id);
+        setIsScannerModalOpen(false);
+      }
+    } else {
+      const newRecordData = {
+        ...formData,
+        artist: previewDetails.artist,
+        title: previewDetails.title,
+        price: "0",
+        market_price: previewDetails.market_price ? parseFloat(previewDetails.market_price).toFixed(2) : "",
+        weight: detectedWeight.toString(),
+        quantity: "1",
+        location: formData.location,
+        cover_image: previewDetails.cover_image || "",
+        tracklist: previewDetails.tracklist || [],
+        identifiers: previewDetails.identifiers || []
+      };
+      await handlePipelineRouting(newRecordData);
+    }
+    
+    setSearchResults([]);
+    setPreviewReleaseId(null);
+    setPreviewDetails(null);
+  };
+
   const startVoiceSearch = (targetTab: 'text' | 'catalog') => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
@@ -493,11 +535,9 @@ export default function VendorDashboard() {
         .map((result: any) => result[0].transcript)
         .join('');
       
-      // Route the dictation dynamically based on the active tab
       if (targetTab === 'text') {
         setTextQuery(transcript); 
       } else if (targetTab === 'catalog') {
-        // Auto-uppercase the catalog dictation so it's perfectly formatted
         setCatalog(transcript.toUpperCase());
       }
     };
@@ -520,6 +560,9 @@ export default function VendorDashboard() {
     
     setIsSearchingText(true);
     setLookupError("");
+    setSearchResults([]);
+    setPreviewReleaseId(null);
+    setPreviewDetails(null);
     
     try {
       const response = await searchDiscogsByText(textQuery); 
@@ -527,7 +570,6 @@ export default function VendorDashboard() {
         setSearchResults(response.results);
       } else {
         setLookupError(response?.error || "No results found for that search.");
-        setSearchResults([]);
       }
     } catch (err) {
       console.error("Text search failed:", err);
@@ -559,7 +601,6 @@ export default function VendorDashboard() {
       (album.tracklist && Array.isArray(album.tracklist) && album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower)));
   });
 
-  // --- SECURITY GUARDS ---
   if (isAuthLoading) {
     return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Unlocking Account...</div>;
   }
@@ -574,14 +615,13 @@ export default function VendorDashboard() {
   return (
     <main className="p-4 sm:p-8 w-full max-w-full overflow-x-hidden mx-auto font-sans relative animate-fade-in pb-20">
       
-      {/* --- HIDDEN DATALIST FOR LOCATION AUTOCOMPLETE --- */}
       <datalist id="location-options">
         {uniqueLocations.map(loc => (
           <option key={loc} value={loc} />
         ))}
       </datalist>
 
-      {/* --- NEW MINIMALIST HEADER --- */}
+      {/* --- HEADER --- */}
       <header className="flex justify-between items-center w-full mb-8 pt-2">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 flex-shrink-0">
@@ -593,34 +633,21 @@ export default function VendorDashboard() {
           </div>
         </div>
         
-        {/* NEW PROFILE DROPDOWN */}
         <div className="relative z-30">
           <button 
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
             className="w-10 h-10 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full flex items-center justify-center text-lg transition shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            aria-label="Profile Menu"
           >
             👤
           </button>
           
           {isProfileMenuOpen && (
             <>
-              {/* Invisible overlay to close dropdown */}
               <div className="fixed inset-0" onClick={() => setIsProfileMenuOpen(false)}></div>
-              
               <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
-                <a href="/vendor/settings" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">
-                  ⚙️ Settings
-                </a>
-                <a href="/" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">
-                  📡 View Radar
-                </a>
-                <button 
-                  onClick={() => supabase.auth.signOut()} 
-                  className="px-5 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 text-left transition flex items-center gap-2"
-                >
-                  🚪 Sign Out
-                </button>
+                <a href="/vendor/settings" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">⚙️ Settings</a>
+                <a href="/" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">📡 View Radar</a>
+                <button onClick={() => supabase.auth.signOut()} className="px-5 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 text-left transition flex items-center gap-2">🚪 Sign Out</button>
               </div>
             </>
           )}
@@ -665,18 +692,8 @@ export default function VendorDashboard() {
 
       {/* --- SORTING CONTROLS --- */}
       <div className="flex gap-2 mb-4">
-        <button 
-          onClick={() => setSortBy('date')} 
-          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${sortBy === 'date' ? 'bg-gray-200 text-gray-900' : 'bg-transparent text-gray-500 hover:bg-gray-100'}`}
-        >
-          Sort: Newest
-        </button>
-        <button 
-          onClick={() => setSortBy('artist')} 
-          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${sortBy === 'artist' ? 'bg-gray-200 text-gray-900' : 'bg-transparent text-gray-500 hover:bg-gray-100'}`}
-        >
-          Sort: Artist A-Z
-        </button>
+        <button onClick={() => setSortBy('date')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${sortBy === 'date' ? 'bg-gray-200 text-gray-900' : 'bg-transparent text-gray-500 hover:bg-gray-100'}`}>Sort: Newest</button>
+        <button onClick={() => setSortBy('artist')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${sortBy === 'artist' ? 'bg-gray-200 text-gray-900' : 'bg-transparent text-gray-500 hover:bg-gray-100'}`}>Sort: Artist A-Z</button>
       </div>
 
       {/* --- INVENTORY LIST --- */}
@@ -697,11 +714,7 @@ export default function VendorDashboard() {
               className="w-full pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-gray-50 transition"
             />
             {localSearch && (
-              <button 
-                type="button" 
-                onClick={() => setLocalSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 font-bold text-xs"
-              >✕</button>
+              <button type="button" onClick={() => setLocalSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 font-bold text-xs">✕</button>
             )}
           </div>
         </div>
@@ -716,11 +729,7 @@ export default function VendorDashboard() {
         ) : (
           <div className="divide-y divide-gray-100 flex flex-col w-full">
             {filteredInventory.map((album) => (
-              <div 
-                key={album.id} 
-                onClick={() => setViewItem(album)} 
-                className="p-3 sm:p-5 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group cursor-pointer"
-              >
+              <div key={album.id} onClick={() => setViewItem(album)} className="p-3 sm:p-5 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group cursor-pointer">
                 {album.cover_image ? (
                   <img src={album.cover_image} alt="cover" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl shadow-sm flex-shrink-0" />
                 ) : (
@@ -736,39 +745,23 @@ export default function VendorDashboard() {
                       ${(album.price_cents / 100).toFixed(2)}
                     </span>
                   </div>
-                  
                   <p className="text-gray-500 text-xs sm:text-sm font-medium truncate mb-1.5">{album.artist}</p>
-                  
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {album.location ? (
-                       <span className="inline-flex items-center bg-gray-900 text-white text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">
-                         📍 {album.location}
-                       </span>
+                       <span className="inline-flex items-center bg-gray-900 text-white text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">📍 {album.location}</span>
                     ) : (
-                       <span className="inline-flex items-center bg-red-50 text-red-600 border border-red-100 text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">
-                         Unassigned
-                       </span>
+                       <span className="inline-flex items-center bg-red-50 text-red-600 border border-red-100 text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">Unassigned</span>
                     )}
                     <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">{album.weight_grams}g</span>
                     <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
-                    
-                    {/* RESTORED MARKET ESTIMATE BADGE */}
                     {album.market_price_cents && album.market_price_cents > 0 ? (
-                      <span className="inline-block bg-blue-50 text-blue-700 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                        Market: ${(album.market_price_cents / 100).toFixed(2)}
-                      </span>
+                      <span className="inline-block bg-blue-50 text-blue-700 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Market: ${(album.market_price_cents / 100).toFixed(2)}</span>
                     ) : null}
                   </div>
                 </div>
 
                 <div className="flex-shrink-0 pl-2">
-                   <button 
-                     onClick={(e) => openEditModal(e, album)} 
-                     className="text-gray-300 hover:text-emerald-600 bg-transparent hover:bg-emerald-50 rounded-lg p-2 transition focus:outline-none"
-                     aria-label="Edit item"
-                   >
-                     ✏️
-                   </button>
+                   <button onClick={(e) => openEditModal(e, album)} className="text-gray-300 hover:text-emerald-600 bg-transparent hover:bg-emerald-50 rounded-lg p-2 transition focus:outline-none">✏️</button>
                 </div>
               </div>
             ))}
@@ -776,184 +769,188 @@ export default function VendorDashboard() {
         )}
       </section>
 
-      {/* --- RAPID INSERTION SCANNER MODAL (ADDICTING COMMAND CENTER) --- */}
+      {/* --- RAPID INSERTION SCANNER MODAL --- */}
       {isScannerModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden relative animate-fade-in flex flex-col max-h-[95vh]">
             
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white">
               <h3 className="font-black text-gray-900 text-xl tracking-tight">Add to Collection</h3>
-              <button 
-                onClick={() => setIsScannerModalOpen(false)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
-              >✕</button>
+              <button onClick={() => setIsScannerModalOpen(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">✕</button>
             </div>
             
             <div className="p-5 overflow-y-auto bg-gray-50 flex-1">
               
-              {/* Mandatory Location Block */}
               <div className="bg-white border-2 border-emerald-500 rounded-2xl p-4 mb-6 shadow-sm">
                 <label className="text-xs font-black text-emerald-800 uppercase tracking-widest flex items-center justify-between mb-2 pl-1">
                   <span>📍 Active Location</span>
                   <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold">REQUIRED</span>
                 </label>
                 <input 
-                  type="text" 
-                  name="location" 
-                  list="location-options"
-                  value={formData.location} 
+                  type="text" name="location" list="location-options" value={formData.location} 
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
                   className="w-full border-0 bg-emerald-50/50 rounded-xl px-4 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:font-normal placeholder:text-emerald-300" 
                   placeholder="e.g. Crate 1, Bin A..." 
                 />
               </div>
 
-              {/* Tab Selector */}
               <div className="flex p-1 bg-gray-200 rounded-xl mb-5">
-                <button 
-                  onClick={() => setScanTab('barcode')} 
-                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'barcode' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-                >📷 Barcode</button>
-                <button 
-                  onClick={() => setScanTab('catalog')} 
-                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'catalog' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-                >📄 Catalog</button>
-                <button 
-                  onClick={() => setScanTab('text')} 
-                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'text' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-                >⌨️ Search</button>
+                <button onClick={() => setScanTab('barcode')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'barcode' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>📷 Barcode</button>
+                <button onClick={() => setScanTab('catalog')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'catalog' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>📄 Catalog</button>
+                <button onClick={() => setScanTab('text')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${scanTab === 'text' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>⌨️ Search</button>
               </div>
 
-              {/* Tab Content: Barcode */}
               {scanTab === 'barcode' && (
                 <div className="animate-fade-in">
                   <div className="flex gap-2">
                     <input 
-                      type="text" 
-                      placeholder={!formData.location ? "Set location first..." : "Type UPC or tap scan..."} 
-                      value={barcode} 
-                      disabled={!formData.location || isSearchingDiscogs}
-                      onChange={(e) => setBarcode(e.target.value)} 
+                      type="text" placeholder={!formData.location ? "Set location first..." : "Type UPC or tap scan..."} value={barcode} 
+                      disabled={!formData.location || isSearchingDiscogs} onChange={(e) => setBarcode(e.target.value)} 
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
                       className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
                     />
-                    <button 
-                      type="button"
-                      onClick={() => setShowScanner(true)}
-                      disabled={!formData.location || isSearchingDiscogs}
-                      className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50 flex items-center gap-2"
-                    >
+                    <button type="button" onClick={() => setShowScanner(true)} disabled={!formData.location || isSearchingDiscogs} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50 flex items-center gap-2">
                       {isSearchingDiscogs ? '⏳' : '📷 Scan'}
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Tab Content: Catalog */}
               {scanTab === 'catalog' && (
                 <div className="animate-fade-in">
                   <div className="flex gap-2 mb-2">
                     <div className="relative flex-1">
                       <input 
-                        type="text" 
-                        placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152..."} 
-                        value={catalog} 
-                        disabled={!formData.location || isSearchingDiscogs}
-                        onChange={(e) => setCatalog(e.target.value)} 
+                        type="text" placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152..."} value={catalog} 
+                        disabled={!formData.location || isSearchingDiscogs} onChange={(e) => setCatalog(e.target.value)} 
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
                         className="w-full border border-gray-200 rounded-xl pl-4 pr-16 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                        {catalog && !isListening && (
-                          <button type="button" onClick={() => setCatalog("")} className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1">✕</button>
-                        )}
-                        <button 
-                          type="button" 
-                          onClick={() => startVoiceSearch('catalog')}
-                          disabled={!formData.location || isSearchingDiscogs}
-                          className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}
-                        >🎤</button>
+                        {catalog && !isListening && <button type="button" onClick={() => setCatalog("")} className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1">✕</button>}
+                        <button type="button" onClick={() => startVoiceSearch('catalog')} disabled={!formData.location || isSearchingDiscogs} className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}>🎤</button>
                       </div>
                     </div>
-                    <button 
-                      type="button" 
-                      onClick={() => handleCatalogLookup(catalog)}
-                      disabled={!formData.location || isSearchingDiscogs || !catalog}
-                      className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50"
-                    >
+                    <button type="button" onClick={() => handleCatalogLookup(catalog)} disabled={!formData.location || isSearchingDiscogs || !catalog} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50">
                       {isSearchingDiscogs ? '⏳' : 'Search'}
                     </button>
                   </div>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowCatalogScanner(true)}
-                    disabled={!formData.location || isSearchingDiscogs}
-                    className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl py-3 text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    📷 Use Camera OCR Reader
-                  </button>
+                  <button type="button" onClick={() => setShowCatalogScanner(true)} disabled={!formData.location || isSearchingDiscogs} className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl py-3 text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">📷 Use Camera OCR Reader</button>
                 </div>
               )}
 
-              {/* Tab Content: Text Search */}
               {scanTab === 'text' && (
                 <div className="animate-fade-in">
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <input 
-                        type="text" 
-                        placeholder={!formData.location ? "Set location first..." : "e.g. Pink Floyd Dark Side"} 
-                        value={textQuery} 
-                        disabled={!formData.location || isSearchingText}
-                        onChange={(e) => setTextQuery(e.target.value)} 
+                        type="text" placeholder={!formData.location ? "Set location first..." : "e.g. Pink Floyd Dark Side"} value={textQuery} 
+                        disabled={!formData.location || isSearchingText} onChange={(e) => setTextQuery(e.target.value)} 
                         onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
-                        className="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
+                        className="w-full border border-gray-200 rounded-xl pl-4 pr-16 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
                       />
-                      <button 
-                        type="button" 
-                        onClick={() => startVoiceSearch('text')}
-                        disabled={!formData.location || isSearchingText}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}
-                      >🎤</button>
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {textQuery && !isListening && <button type="button" onClick={() => setTextQuery("")} className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1">✕</button>}
+                        <button type="button" onClick={() => startVoiceSearch('text')} disabled={!formData.location || isSearchingText} className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}>🎤</button>
+                      </div>
                     </div>
-                    <button 
-                      type="button" 
-                      onClick={handleTextSearch}
-                      disabled={!formData.location || isSearchingText || !textQuery}
-                      className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50"
-                    >
+                    <button type="button" onClick={handleTextSearch} disabled={!formData.location || isSearchingText || !textQuery} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50">
                       {isSearchingText ? '...' : 'Search'}
                     </button>
                   </div>
 
-                  {/* Search Results rendering right inside the tab */}
+                  {/* --- NEW UPGRADED TWO-BUTTON LAZY ROW LISTING --- */}
                   {searchResults.length > 0 && (
-                    <div className="mt-4 border border-gray-200 rounded-xl bg-white shadow-sm max-h-60 overflow-y-auto w-full">
-                      {searchResults.map((res: any) => (
-                        <div 
-                          key={res.id} 
-                          onClick={() => handleSelectRelease(res.id)}
-                          className="p-3 border-b border-gray-100 hover:bg-emerald-50 cursor-pointer flex gap-3 items-center transition last:border-b-0"
-                        >
-                          {res.thumb ? (
-                            <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded-lg shadow-sm flex-shrink-0" />
-                          ) : (
-                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
-                            <p className="text-[10px] font-semibold text-gray-500 mt-0.5 truncate uppercase tracking-wider">
-                              {res.year || 'N/A'} • {res.country || 'N/A'} • {res.label?.[0] || 'Unknown'}
-                            </p>
+                    <div className="mt-4 border border-gray-200 rounded-xl bg-white shadow-sm max-h-80 overflow-y-auto w-full divide-y divide-gray-100">
+                      {searchResults.map((res: any) => {
+                        const isCurrentlyExpanded = previewReleaseId === res.id;
+                        return (
+                          <div key={res.id} className="p-3 bg-white transition flex flex-col">
+                            <div className="flex gap-3 items-center w-full">
+                              {res.thumb ? (
+                                <img src={res.thumb} alt="cover" className="w-12 h-12 object-cover rounded-lg shadow-sm flex-shrink-0" />
+                              ) : (
+                                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-400 flex-shrink-0">No Img</div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-gray-900 leading-tight truncate">{res.title}</p>
+                                <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wider truncate">
+                                  {res.year || 'N/A'} • {res.country || 'N/A'} • {res.label?.[0] || 'Unknown'}
+                                </p>
+                              </div>
+                              
+                              {/* THE CRITICAL TWO BUTTONS CONTROL PANEL */}
+                              <div className="flex gap-1.5 flex-shrink-0">
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleTogglePreview(res.id)}
+                                  className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition ${isCurrentlyExpanded ? 'bg-gray-200 border-gray-300 text-gray-800' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                                >
+                                  {isCurrentlyExpanded ? 'Hide' : 'View 👁️'}
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => handleDirectSelect(res)}
+                                  className="text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg shadow-sm transition"
+                                >
+                                  Select ➕
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* DYNAMIC SECONDARY NESTED PREVIEW PANEL */}
+                            {isCurrentlyExpanded && (
+                              <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs animate-fade-in">
+                                {isFetchingPreview ? (
+                                  <div className="text-center py-2 text-gray-400 font-bold animate-pulse">Consulting Discogs Database...</div>
+                                ) : previewDetails ? (
+                                  <div>
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                      <div className="bg-white p-2 border border-gray-100 rounded-lg">
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Market Price Est.</p>
+                                        <p className="text-sm font-black text-blue-600 mt-0.5">
+                                          {previewDetails.market_price ? `$${parseFloat(previewDetails.market_price).toFixed(2)}` : 'N/A'}
+                                        </p>
+                                      </div>
+                                      <div className="bg-white p-2 border border-gray-100 rounded-lg">
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Detected Weight</p>
+                                        <p className="text-sm font-black text-gray-800 mt-0.5">
+                                          {previewDetails.weight ? `${previewDetails.weight}g` : '120g (Std)'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    
+                                    {previewDetails.tracklist && previewDetails.tracklist.length > 0 && (
+                                      <div className="mb-3 max-h-24 overflow-y-auto border border-gray-200 rounded-lg bg-white p-1">
+                                        <p className="text-[9px] font-bold text-gray-400 px-1 uppercase sticky top-0 bg-white">Track List</p>
+                                        {previewDetails.tracklist.slice(0, 4).map((t: any, idx: number) => (
+                                          <p key={idx} className="text-[10px] text-gray-600 px-1 truncate font-medium">{t.position || idx+1}. {t.title}</p>
+                                        ))}
+                                        {previewDetails.tracklist.length > 4 && <p className="text-[9px] text-gray-400 italic px-1">+{previewDetails.tracklist.length - 4} more tracks</p>}
+                                      </div>
+                                    )}
+
+                                    <button 
+                                      type="button" 
+                                      onClick={handleSelectFromPreview}
+                                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-center shadow-sm"
+                                    >
+                                      Commit Verified Release to Vault
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <p className="text-center text-red-500 font-semibold">Failed to fetch deep details.</p>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Error Display */}
               {lookupError && (
                 <div className="mt-4 text-xs font-bold text-red-600 bg-red-50 p-3 rounded-xl border border-red-100 text-center">
                   {lookupError}
@@ -962,31 +959,19 @@ export default function VendorDashboard() {
 
             </div>
             
-            {/* Modal Footer Controls */}
             <div className="p-4 border-t border-gray-100 bg-white flex justify-between items-center">
               <label className="flex items-center gap-2 cursor-pointer group">
                 <input 
-                  type="checkbox" 
-                  checked={autoSave}
-                  onChange={(e) => setAutoSave(e.target.checked)}
+                  type="checkbox" checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)}
                   className="w-4 h-4 text-emerald-600 bg-gray-100 border-gray-300 rounded focus:ring-emerald-500"
                 />
-                <span className="text-xs font-bold text-gray-600 group-hover:text-gray-900 transition">
-                  Auto-Save On Scan
-                </span>
+                <span className="text-xs font-bold text-gray-600 group-hover:text-gray-900 transition">Auto-Save On Scan</span>
               </label>
-
-              <button 
-                onClick={openManualAddModal}
-                className="text-xs font-black text-gray-500 hover:text-emerald-700 transition"
-              >
-                ✍️ Add Manually
-              </button>
+              <button onClick={openManualAddModal} className="text-xs font-black text-gray-500 hover:text-emerald-700 transition">✍️ Add Manually</button>
             </div>
           </div>
         </div>
       )}
-
 
       {/* --- DETAILS VIEW MODAL --- */}
       {viewItem && (
@@ -1005,21 +990,12 @@ export default function VendorDashboard() {
                   <p className="text-sm text-gray-500 font-medium">{viewItem.artist}</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setViewItem(null)}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
-              >✕</button>
+              <button onClick={() => setViewItem(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">✕</button>
             </div>
             
             <div className="p-6 overflow-y-auto flex flex-col gap-6">
-              
               <div className="flex gap-4">
-                <button 
-                  onClick={() => handleRematchRelease(viewItem)}
-                  className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition"
-                >
-                  🔄 Re-match Release
-                </button>
+                <button onClick={() => handleRematchRelease(viewItem)} className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition">🔄 Re-match Release</button>
               </div>
 
               <div className="flex gap-4">
@@ -1029,9 +1005,7 @@ export default function VendorDashboard() {
                 </div>
                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex-1">
                   <p className="text-xs font-bold text-blue-800 uppercase tracking-wider">Market Est.</p>
-                  <p className="text-2xl font-black text-blue-600">
-                    {viewItem.market_price_cents ? `$${(viewItem.market_price_cents / 100).toFixed(2)}` : 'N/A'}
-                  </p>
+                  <p className="text-2xl font-black text-blue-600">{viewItem.market_price_cents ? `$${(viewItem.market_price_cents / 100).toFixed(2)}` : 'N/A'}</p>
                 </div>
                 <div className="bg-gray-100 border border-gray-200 rounded-xl p-4 flex-1 flex flex-col justify-center items-center">
                   <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Location</p>
@@ -1055,7 +1029,6 @@ export default function VendorDashboard() {
                   </div>
                 </div>
               )}
-
             </div>
           </div>
         </div>
@@ -1067,25 +1040,17 @@ export default function VendorDashboard() {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
             
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-900 text-lg">
-                {itemToEdit ? "Edit Inventory Record" : "Review & Add Record"}
-              </h3>
-              <button 
-                onClick={() => { setIsModalOpen(false); setItemToEdit(null); }}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
-              >✕</button>
+              <h3 className="font-bold text-gray-900 text-lg">{itemToEdit ? "Edit Inventory Record" : "Review & Add Record"}</h3>
+              <button onClick={() => { setIsModalOpen(false); setItemToEdit(null); }} className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">✕</button>
             </div>
             
             <div className="p-6 overflow-y-auto">
               <form id="recordForm" onSubmit={handleModalSubmit} className="flex flex-col gap-4">
-                
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
                   <div className="relative w-full">
                     <input type="text" name="title" required value={editFormData.title} onChange={(e) => setEditFormData({...editFormData, title: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
-                    {editFormData.title && (
-                      <button type="button" onClick={() => setEditFormData({...editFormData, title: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
-                    )}
+                    {editFormData.title && <button type="button" onClick={() => setEditFormData({...editFormData, title: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>}
                   </div>
                 </div>
 
@@ -1093,9 +1058,7 @@ export default function VendorDashboard() {
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Artist <span className="text-red-500">*</span></label>
                   <div className="relative w-full">
                     <input type="text" name="artist" required value={editFormData.artist} onChange={(e) => setEditFormData({...editFormData, artist: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
-                    {editFormData.artist && (
-                      <button type="button" onClick={() => setEditFormData({...editFormData, artist: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>
-                    )}
+                    {editFormData.artist && <button type="button" onClick={() => setEditFormData({...editFormData, artist: ""})} className="absolute right-3 top-1/2 translate-y-[1px] text-gray-400 hover:text-gray-600 font-bold text-xs">✕</button>}
                   </div>
                 </div>
 
@@ -1121,11 +1084,7 @@ export default function VendorDashboard() {
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Condition</label>
-                    <select
-                      value={editFormData.condition}
-                      onChange={(e) => setEditFormData({...editFormData, condition: e.target.value})}
-                      className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                    >
+                    <select value={editFormData.condition} onChange={(e) => setEditFormData({...editFormData, condition: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
                       <option value="NEW">NEW</option>
                       <option value="M">M (Mint)</option>
                       <option value="NM">NM (Near Mint)</option>
@@ -1140,15 +1099,7 @@ export default function VendorDashboard() {
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Location</label>
                   <div className="w-full">
-                    <input 
-                      type="text" 
-                      name="location" 
-                      list="location-options" 
-                      value={editFormData.location} 
-                      onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} 
-                      className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" 
-                      placeholder="Select or type a location..."
-                    />
+                    <input type="text" name="location" list="location-options" value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="Select or type a location..." />
                   </div>
                 </div>
                </form>
@@ -1161,12 +1112,7 @@ export default function VendorDashboard() {
                        <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">📷 High-Res Camera Roll</h4>
                        <p className="text-xs text-gray-500 leading-tight mt-1">Snap photos of specific details for buyers to verify.</p>
                      </div>
-                     
-                     <select 
-                       value={uploadCaption}
-                       onChange={(e) => setUploadCaption(e.target.value)}
-                       className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                     >
+                     <select value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                        <option value="Dead Wax / Matrix">Dead Wax / Matrix</option>
                        <option value="Center Label">Center Label</option>
                        <option value="Front Cover">Front Cover</option>
@@ -1180,91 +1126,43 @@ export default function VendorDashboard() {
                      {galleryImages.map(img => (
                        <div key={img.id} className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200 group">
                          <img src={img.image_url} alt="Gallery item" className="w-full h-full object-cover" />
-                         
                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
                            <p className="text-[8px] text-white font-bold uppercase tracking-wider text-center truncate">{img.caption}</p>
                          </div>
-
-                         <button 
-                           type="button" 
-                           onClick={() => handleDeleteImage(img.id)} 
-                           className="absolute top-1.5 right-1.5 bg-gray-900/80 hover:bg-red-500 text-white rounded-full w-7 h-7 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition backdrop-blur-sm"
-                         >✕</button>
+                         <button type="button" onClick={() => handleDeleteImage(img.id)} className="absolute top-1.5 right-1.5 bg-gray-900/80 hover:bg-red-500 text-white rounded-full w-7 h-7 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition backdrop-blur-sm">✕</button>
                        </div>
                      ))}
-
                      <label className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:bg-gray-50 hover:border-emerald-400 hover:text-emerald-600 cursor-pointer transition">
-                       <input 
-                         type="file" 
-                         accept="image/*" 
-                         capture="environment" 
-                         onChange={handleImageUpload} 
-                         className="hidden" 
-                         disabled={isUploading} 
-                       />
+                       <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" disabled={isUploading} />
                        <span className="text-2xl mb-1">{isUploading ? '⏳' : '➕'}</span>
-                       <span className="text-[10px] font-bold uppercase tracking-wider text-center px-1">
-                         {isUploading ? 'Uploading...' : 'Take Photo'}
-                       </span>
+                       <span className="text-[10px] font-bold uppercase tracking-wider text-center px-1">{isUploading ? 'Uploading...' : 'Take Photo'}</span>
                      </label>
                    </div>
                  </div>
                )}
-
             </div>
 
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-2 sm:gap-3">
               {itemToEdit && (
-                <button 
-                  type="button" 
-                  onClick={() => handleDeleteRecord(itemToEdit.id)}
-                  disabled={isUpdating}
-                  className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl px-4 py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 flex items-center justify-center"
-                >
-                  🗑️
-                </button>
+                <button type="button" onClick={() => handleDeleteRecord(itemToEdit.id)} disabled={isUpdating} className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl px-4 py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50 flex items-center justify-center">🗑️</button>
               )}
-              <button 
-                type="button" 
-                onClick={() => { setIsModalOpen(false); setItemToEdit(null); }}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl py-3.5 text-sm font-bold transition shadow-sm"
-              >
-                Cancel
-              </button>
-              <button 
-                type="submit" 
-                form="recordForm"
-                disabled={isUpdating} 
-                className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50"
-              >
-                {isUpdating ? 'Saving...' : (itemToEdit ? 'Update' : 'Save')}
-              </button>
+              <button type="button" onClick={() => { setIsModalOpen(false); setItemToEdit(null); }} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl py-3.5 text-sm font-bold transition shadow-sm">Cancel</button>
+              <button type="submit" form="recordForm" disabled={isUpdating} className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-3.5 text-sm font-bold transition shadow-sm disabled:opacity-50">{isUpdating ? 'Saving...' : (itemToEdit ? 'Update' : 'Save')}</button>
             </div>
-
           </div>
         </div>
       )}
 
-      {/* --- BARCODE SCANNER MODAL (Higher Z-Index to overlay Scanner Command Center) --- */}
+      {/* --- BARCODE SCANNER MODAL --- */}
       {showScanner && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-80 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative animate-fade-in">
-            <button 
-              onClick={() => setShowScanner(false)}
-              className="absolute top-4 right-4 z-10 bg-gray-900 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow hover:bg-gray-700 transition"
-            >✕</button>
+            <button onClick={() => setShowScanner(false)} className="absolute top-4 right-4 z-10 bg-gray-900 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow hover:bg-gray-700 transition">✕</button>
             <div className="p-4 bg-gray-50 border-b border-gray-200 text-center">
               <h3 className="font-bold text-gray-900">Scan Barcode</h3>
               <p className="text-xs text-gray-500">Center the barcode in the camera view</p>
             </div>
-            
-            <BarcodeScanner 
-              onDetected={async (code: string) => {
-                setBarcode(code);
-                setShowScanner(false);
-                await processBarcodeLookup(code);
-              }}
-            />
+            <BarcodeScanner onDetected={async (code: string) => { setBarcode(code); setShowScanner(false); await processBarcodeLookup(code); }} />
           </div>
         </div>
       )}
@@ -1272,14 +1170,7 @@ export default function VendorDashboard() {
       {/* --- CATALOG OCR SCANNER MODAL --- */}
       {showCatalogScanner && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-80 p-4 animate-fade-in">
-          <CatalogScanner 
-            onClose={() => setShowCatalogScanner(false)}
-            onDetected={async (text: string) => {
-              setCatalog(text); 
-              setShowCatalogScanner(false); 
-              await handleCatalogLookup(text); 
-            }}
-          />
+          <CatalogScanner onClose={() => setShowCatalogScanner(false)} onDetected={async (text: string) => { setCatalog(text); setShowCatalogScanner(false); await handleCatalogLookup(text); }} />
         </div>
       )}
 
