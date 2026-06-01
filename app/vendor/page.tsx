@@ -1054,8 +1054,21 @@ export default function VendorDashboard() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Your Price ($) <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1 flex items-center gap-1">
+                      Your Price ($) <span className="text-red-500">*</span>
+                    </label>
                     <input type="number" name="price" step="0.01" required value={editFormData.price} onChange={(e) => setEditFormData({...editFormData, price: e.target.value})} className="w-full mt-1.5 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+                    
+                    {/* PUBLIC/PRIVATE LOGIC TOOLTIP */}
+                    <div className={`mt-2 p-2 rounded-lg border text-[10px] font-semibold flex gap-2 items-start transition-colors ${parseFloat(editFormData.price || "0") > 0 ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-gray-100 border-gray-200 text-gray-500'}`}>
+                      <span className="text-xs">{parseFloat(editFormData.price || "0") > 0 ? '📡' : '🔒'}</span>
+                      <p className="leading-tight">
+                        {parseFloat(editFormData.price || "0") > 0 
+                          ? "This record is priced and will broadcast LIVE to the public radar map."
+                          : "Price is $0.00. This item will remain private in your local inventory."}
+                      </p>
+                    </div>
+
                   </div>
                   <div>
                     <label className="text-xs font-bold text-emerald-600 uppercase tracking-wider pl-1">Discogs Lowest ($)</label>
