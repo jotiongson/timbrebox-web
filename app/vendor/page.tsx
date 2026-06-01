@@ -751,6 +751,13 @@ export default function VendorDashboard() {
                     )}
                     <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">{album.weight_grams}g</span>
                     <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
+                    
+                    {/* RESTORED MARKET ESTIMATE BADGE */}
+                    {album.market_price_cents && album.market_price_cents > 0 ? (
+                      <span className="inline-block bg-blue-50 text-blue-700 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                        Market: ${(album.market_price_cents / 100).toFixed(2)}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
