@@ -83,7 +83,7 @@ export default function VendorDashboard() {
   const [isScannerModalOpen, setIsScannerModalOpen] = useState(false);
   const [scanTab, setScanTab] = useState<'barcode' | 'catalog' | 'text'>('barcode');
 
-  // --- NEW: LAZY LOADING PREVIEW STATES ---
+  // --- LAZY LOADING PREVIEW STATES ---
   const [previewReleaseId, setPreviewReleaseId] = useState<number | null>(null);
   const [previewDetails, setPreviewDetails] = useState<any | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
@@ -361,7 +361,7 @@ export default function VendorDashboard() {
         market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
         weight: result.weight || "120",
         quantity: "1",
-        location: formData.location,
+        location: formData.location, // Safely locked to global active location
         cover_image: result.cover_image || "",
         tracklist: result.tracklist || [],
         identifiers: result.identifiers || []
@@ -389,7 +389,7 @@ export default function VendorDashboard() {
         market_price: result.market_price ? parseFloat(result.market_price).toFixed(2) : "",
         weight: result.weight || "120",
         quantity: "1",
-        location: formData.location,
+        location: formData.location, // Safely locked to global active location
         cover_image: result.cover_image || "",
         tracklist: result.tracklist || [],
         identifiers: result.identifiers || []
@@ -419,10 +419,13 @@ export default function VendorDashboard() {
     setIsSearchingText(false);
   };
 
-  // --- NEW: FETCH ONE SINGLE RECORD FOR LAZY PREVIEW (SAVES RATE LIMIT) ---
+  // --- STRICT LOCATION PROTECTED PREVIEW ACTIVATION ---
   const handleTogglePreview = async (releaseId: number) => {
+    if (!formData.location.trim()) {
+      return; // Absolute safety guard
+    }
+
     if (previewReleaseId === releaseId) {
-      // Toggle off if clicked again
       setPreviewReleaseId(null);
       setPreviewDetails(null);
       return;
@@ -442,31 +445,7 @@ export default function VendorDashboard() {
     setIsFetchingPreview(false);
   };
 
-  // --- NEW: DIRECT RAPID SELECT BUTTON (ZERO EXTRA API OVERHEAD) ---
-  const handleDirectSelect = async (shallowResult: any) => {
-    // Splits artist and title out safely from Discogs composite format
-    const titleParts = shallowResult.title.split(' - ');
-    const detectedArtist = titleParts[0]?.trim() || "Unknown Artist";
-    const detectedTitle = titleParts[1]?.trim() || titleParts[0]?.trim() || "Unknown Title";
-
-    const newRecordData = {
-      ...formData,
-      artist: detectedArtist,
-      title: detectedTitle,
-      price: "0",
-      market_price: "", // Bypassed intentionally to avoid secondary API execution
-      weight: "120",
-      quantity: "1",
-      location: formData.location,
-      cover_image: shallowResult.thumb || "",
-      tracklist: [],
-      identifiers: []
-    };
-
-    await handlePipelineRouting(newRecordData);
-  };
-
-  // Triggered from inside the preview sheet if they like what they see
+  // --- COMMIT FUNCTION FROM PREVIEW INSIDE POPUP ---
   const handleSelectFromPreview = async () => {
     if (!previewDetails) return;
 
@@ -494,14 +473,13 @@ export default function VendorDashboard() {
       }
     } else {
       const newRecordData = {
-        ...formData,
+        ...formData, // Inherits the guaranteed active location safely
         artist: previewDetails.artist,
         title: previewDetails.title,
         price: "0",
         market_price: previewDetails.market_price ? parseFloat(previewDetails.market_price).toFixed(2) : "",
         weight: detectedWeight.toString(),
         quantity: "1",
-        location: formData.location,
         cover_image: previewDetails.cover_image || "",
         tracklist: previewDetails.tracklist || [],
         identifiers: previewDetails.identifiers || []
@@ -707,9 +685,7 @@ export default function VendorDashboard() {
           <div className="w-full sm:w-64 relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
             <input 
-              type="text" 
-              placeholder="Search local crates..." 
-              value={localSearch}
+              type="text" placeholder="Search local crates..." value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
               className="w-full pl-9 pr-8 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-gray-50 transition"
             />
@@ -781,6 +757,7 @@ export default function VendorDashboard() {
             
             <div className="p-5 overflow-y-auto bg-gray-50 flex-1">
               
+              {/* MANDATORY LOCATION CONTROL BLOCK */}
               <div className="bg-white border-2 border-emerald-500 rounded-2xl p-4 mb-6 shadow-sm">
                 <label className="text-xs font-black text-emerald-800 uppercase tracking-widest flex items-center justify-between mb-2 pl-1">
                   <span>📍 Active Location</span>
@@ -790,7 +767,7 @@ export default function VendorDashboard() {
                   type="text" name="location" list="location-options" value={formData.location} 
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })} 
                   className="w-full border-0 bg-emerald-50/50 rounded-xl px-4 py-3 text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder:font-normal placeholder:text-emerald-300" 
-                  placeholder="e.g. Crate 1, Bin A..." 
+                  placeholder="Set Location to activate Scanner/Search..." 
                 />
               </div>
 
@@ -804,12 +781,12 @@ export default function VendorDashboard() {
                 <div className="animate-fade-in">
                   <div className="flex gap-2">
                     <input 
-                      type="text" placeholder={!formData.location ? "Set location first..." : "Type UPC or tap scan..."} value={barcode} 
-                      disabled={!formData.location || isSearchingDiscogs} onChange={(e) => setBarcode(e.target.value)} 
+                      type="text" placeholder={!formData.location.trim() ? "⚠️ Set active location first..." : "Type UPC barcode here..."} value={barcode} 
+                      disabled={!formData.location.trim() || isSearchingDiscogs} onChange={(e) => setBarcode(e.target.value)} 
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); processBarcodeLookup(barcode); } }}
                       className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
                     />
-                    <button type="button" onClick={() => setShowScanner(true)} disabled={!formData.location || isSearchingDiscogs} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50 flex items-center gap-2">
+                    <button type="button" onClick={() => setShowScanner(true)} disabled={!formData.location.trim() || isSearchingDiscogs} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50 flex items-center gap-2">
                       {isSearchingDiscogs ? '⏳' : '📷 Scan'}
                     </button>
                   </div>
@@ -821,21 +798,21 @@ export default function VendorDashboard() {
                   <div className="flex gap-2 mb-2">
                     <div className="relative flex-1">
                       <input 
-                        type="text" placeholder={!formData.location ? "Set location first..." : "e.g. FC 37152..."} value={catalog} 
-                        disabled={!formData.location || isSearchingDiscogs} onChange={(e) => setCatalog(e.target.value)} 
+                        type="text" placeholder={!formData.location.trim() ? "⚠️ Set active location first..." : "e.g. FC 37152..."} value={catalog} 
+                        disabled={!formData.location.trim() || isSearchingDiscogs} onChange={(e) => setCatalog(e.target.value)} 
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCatalogLookup(catalog); } }}
                         className="w-full border border-gray-200 rounded-xl pl-4 pr-16 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                         {catalog && !isListening && <button type="button" onClick={() => setCatalog("")} className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1">✕</button>}
-                        <button type="button" onClick={() => startVoiceSearch('catalog')} disabled={!formData.location || isSearchingDiscogs} className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}>🎤</button>
+                        <button type="button" onClick={() => startVoiceSearch('catalog')} disabled={!formData.location.trim() || isSearchingDiscogs} className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}>🎤</button>
                       </div>
                     </div>
-                    <button type="button" onClick={() => handleCatalogLookup(catalog)} disabled={!formData.location || isSearchingDiscogs || !catalog} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50">
-                      {isSearchingDiscogs ? '⏳' : 'Search'}
+                    <button type="button" onClick={() => handleCatalogLookup(catalog)} disabled={!formData.location.trim() || isSearchingDiscogs || !catalog} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50">
+                      Search
                     </button>
                   </div>
-                  <button type="button" onClick={() => setShowCatalogScanner(true)} disabled={!formData.location || isSearchingDiscogs} className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl py-3 text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">📷 Use Camera OCR Reader</button>
+                  <button type="button" onClick={() => setShowCatalogScanner(true)} disabled={!formData.location.trim() || isSearchingDiscogs} className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl py-3 text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">📷 Use Camera OCR Reader</button>
                 </div>
               )}
 
@@ -844,26 +821,28 @@ export default function VendorDashboard() {
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <input 
-                        type="text" placeholder={!formData.location ? "Set location first..." : "e.g. Pink Floyd Dark Side"} value={textQuery} 
-                        disabled={!formData.location || isSearchingText} onChange={(e) => setTextQuery(e.target.value)} 
+                        type="text" placeholder={!formData.location.trim() ? "⚠️ Set active location first..." : "e.g. Pink Floyd Dark Side"} value={textQuery} 
+                        disabled={!formData.location.trim() || isSearchingText} onChange={(e) => setTextQuery(e.target.value)} 
                         onKeyDown={(e) => { if (e.key === 'Enter') handleTextSearch(e); }}
                         className="w-full border border-gray-200 rounded-xl pl-4 pr-16 py-3 text-sm focus:outline-none focus:border-emerald-500 bg-white disabled:bg-gray-100 font-medium" 
                       />
                       <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                         {textQuery && !isListening && <button type="button" onClick={() => setTextQuery("")} className="text-gray-400 hover:text-gray-600 font-bold text-xs p-1">✕</button>}
-                        <button type="button" onClick={() => startVoiceSearch('text')} disabled={!formData.location || isSearchingText} className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}>🎤</button>
+                        <button type="button" onClick={() => startVoiceSearch('text')} disabled={!formData.location.trim() || isSearchingText} className={`p-1.5 rounded-lg transition ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-emerald-500'}`}>🎤</button>
                       </div>
                     </div>
-                    <button type="button" onClick={handleTextSearch} disabled={!formData.location || isSearchingText || !textQuery} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50">
-                      {isSearchingText ? '...' : 'Search'}
+                    <button type="button" onClick={handleTextSearch} disabled={!formData.location.trim() || isSearchingText || !textQuery} className="bg-gray-900 hover:bg-emerald-600 text-white rounded-xl px-5 font-black transition shadow-sm disabled:opacity-50">
+                      Search
                     </button>
                   </div>
 
-                  {/* --- NEW UPGRADED TWO-BUTTON LAZY ROW LISTING --- */}
+                  {/* --- CONDENSED TARGETED EYE VIEWER --- */}
                   {searchResults.length > 0 && (
                     <div className="mt-4 border border-gray-200 rounded-xl bg-white shadow-sm max-h-80 overflow-y-auto w-full divide-y divide-gray-100">
                       {searchResults.map((res: any) => {
                         const isCurrentlyExpanded = previewReleaseId === res.id;
+                        const isLocationBlank = !formData.location.trim();
+                        
                         return (
                           <div key={res.id} className="p-3 bg-white transition flex flex-col">
                             <div className="flex gap-3 items-center w-full">
@@ -879,26 +858,27 @@ export default function VendorDashboard() {
                                 </p>
                               </div>
                               
-                              {/* THE CRITICAL TWO BUTTONS CONTROL PANEL */}
-                              <div className="flex gap-1.5 flex-shrink-0">
+                              {/* SINGLE TARGET INSPECT ICON WITH BLANK LOCATION PROTECTION */}
+                              <div className="flex-shrink-0 pl-1">
                                 <button 
                                   type="button" 
+                                  disabled={isLocationBlank}
                                   onClick={() => handleTogglePreview(res.id)}
-                                  className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition ${isCurrentlyExpanded ? 'bg-gray-200 border-gray-300 text-gray-800' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
+                                  className={`w-10 h-10 rounded-xl border flex items-center justify-center text-base transition-all ${
+                                    isLocationBlank 
+                                      ? 'bg-gray-100 border-gray-200 opacity-40 cursor-not-allowed text-gray-400' 
+                                      : isCurrentlyExpanded 
+                                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-500/20' 
+                                        : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                                  }`}
+                                  title={isLocationBlank ? "Please set collector location before viewing details" : "Preview release details"}
                                 >
-                                  {isCurrentlyExpanded ? 'Hide' : 'View 👁️'}
-                                </button>
-                                <button 
-                                  type="button"
-                                  onClick={() => handleDirectSelect(res)}
-                                  className="text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg shadow-sm transition"
-                                >
-                                  Select ➕
+                                  👁️
                                 </button>
                               </div>
                             </div>
 
-                            {/* DYNAMIC SECONDARY NESTED PREVIEW PANEL */}
+                            {/* DYNAMIC SECONDARY PREVIEW SHEET */}
                             {isCurrentlyExpanded && (
                               <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs animate-fade-in">
                                 {isFetchingPreview ? (
@@ -907,13 +887,13 @@ export default function VendorDashboard() {
                                   <div>
                                     <div className="grid grid-cols-2 gap-2 mb-3">
                                       <div className="bg-white p-2 border border-gray-100 rounded-lg">
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Market Price Est.</p>
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Discogs Value Est.</p>
                                         <p className="text-sm font-black text-blue-600 mt-0.5">
                                           {previewDetails.market_price ? `$${parseFloat(previewDetails.market_price).toFixed(2)}` : 'N/A'}
                                         </p>
                                       </div>
                                       <div className="bg-white p-2 border border-gray-100 rounded-lg">
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Detected Weight</p>
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Vinyl Weight</p>
                                         <p className="text-sm font-black text-gray-800 mt-0.5">
                                           {previewDetails.weight ? `${previewDetails.weight}g` : '120g (Std)'}
                                         </p>
@@ -933,7 +913,7 @@ export default function VendorDashboard() {
                                     <button 
                                       type="button" 
                                       onClick={handleSelectFromPreview}
-                                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-center shadow-sm"
+                                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2.5 rounded-xl text-center shadow-lg shadow-emerald-500/10 transition transform active:scale-[0.99]"
                                     >
                                       Commit Verified Release to Vault
                                     </button>
