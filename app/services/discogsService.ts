@@ -1,35 +1,55 @@
 "use server";
 
+import { supabase } from "../supabase";
+
 // Helper function to dig through Discogs format quirks and find the weight
 function extractWeightFromFormats(formats: any[]): string {
   if (!formats || formats.length === 0) return '';
   
   const format = formats[0];
   const descriptions = format.descriptions || [];
-  const text = format.text || ""; // This is where "200 gram" was hiding!
+  const text = format.text || ""; 
 
-  // Combine descriptions and text into one single lowercase string
   const combinedText = [...descriptions, text].join(" ").toLowerCase();
-
-  // Look for a number immediately followed by "g" or "gram" (e.g., "200g", "180 gram")
   const weightMatch = combinedText.match(/(\d+)\s*(g|gram)/);
   
   if (weightMatch) {
-    return weightMatch[1]; // Returns just the number (e.g., "200")
+    return weightMatch[1]; 
   }
-  
   return '';
 }
 
-export async function searchDiscogsByBarcode(barcode: string) {
-  const token = process.env.DISCOGS_PAT;
+// Helper function to check and set cache
+async function checkCache(queryType: string, queryValue: string) {
+  const { data, error } = await supabase
+    .from('discogs_cache')
+    .select('discogs_data')
+    .eq('query_type', queryType)
+    .eq('query_value', queryValue)
+    .single();
+    
+  if (data && !error) return data.discogs_data;
+  return null;
+}
 
+async function setCache(queryType: string, queryValue: string, payload: any) {
+  await supabase.from('discogs_cache').insert([{
+    query_type: queryType,
+    query_value: queryValue,
+    discogs_data: payload
+  }]);
+}
+
+export async function searchDiscogsByBarcode(barcode: string) {
+  const cachedData = await checkCache('barcode', barcode);
+  if (cachedData) return cachedData;
+
+  const token = process.env.DISCOGS_PAT;
   if (!token) {
     console.error("[Discogs] Token missing from environment variables.");
     return { error: "Server configuration error." };
   }
 
-  // type=release ensures we don't get abstract Master records
   const searchUrl = `https://api.discogs.com/database/search?barcode=${barcode}&type=release&token=${token}`;
 
   try {
@@ -72,7 +92,7 @@ export async function searchDiscogsByBarcode(barcode: string) {
         extractedWeight = extractWeightFromFormats(releaseData.formats);
       }
 
-      return {
+      const payload = {
         success: true,
         artist: artist,
         title: title,
@@ -84,6 +104,9 @@ export async function searchDiscogsByBarcode(barcode: string) {
         weight: extractedWeight,
         market_price: marketPrice 
       };
+
+      await setCache('barcode', barcode, payload);
+      return payload;
     }
     return { error: "No records found for this barcode." };
   } catch (error: any) {
@@ -93,10 +116,12 @@ export async function searchDiscogsByBarcode(barcode: string) {
 }
 
 export async function searchDiscogsByText(query: string) {
+  const cachedData = await checkCache('text_search', query);
+  if (cachedData) return cachedData;
+
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
 
-  // type=release ensures pricing is available on the items returned
   const searchUrl = `https://api.discogs.com/database/search?q=${encodeURIComponent(query)}&type=release&format=vinyl&per_page=20&token=${token}`;
 
   try {
@@ -108,7 +133,6 @@ export async function searchDiscogsByText(query: string) {
     
     const data = await response.json();
     
-    // Map the results to ensure lowest_price is explicitly available
     const mappedResults = (data.results || []).map((res: any) => {
        return {
          ...res,
@@ -116,7 +140,10 @@ export async function searchDiscogsByText(query: string) {
        }
     });
 
-    return { success: true, results: mappedResults };
+    const payload = { success: true, results: mappedResults };
+    await setCache('text_search', query, payload);
+    return payload;
+
   } catch (error: any) {
     console.error("[Discogs] Text Search Error:", error.message);
     return { error: "Failed to search Discogs API." };
@@ -124,6 +151,9 @@ export async function searchDiscogsByText(query: string) {
 }
 
 export async function getDiscogsReleaseDetails(releaseId: number) {
+  const cachedData = await checkCache('release_details', releaseId.toString());
+  if (cachedData) return cachedData;
+
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
 
@@ -143,7 +173,7 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
     
     const extractedWeight = extractWeightFromFormats(data.formats);
     
-    return {
+    const payload = {
       success: true,
       artist: cleanArtist,
       title: data.title || 'Unknown Title',
@@ -152,10 +182,14 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
       cover_image: data.images && data.images.length > 0 ? data.images[0].uri : null,
       tracklist: data.tracklist || [],
       identifiers: data.identifiers || [], 
-      formats: data.formats || [], // Passes formats back for UI overrides
+      formats: data.formats || [], 
       weight: extractedWeight,
       market_price: data.lowest_price || null 
     };
+
+    await setCache('release_details', releaseId.toString(), payload);
+    return payload;
+
   } catch (error: any) {
     console.error("[Discogs] Release Details Error:", error.message);
     return { error: "Failed to fetch release details." };
@@ -163,6 +197,9 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
 }
 
 export async function searchDiscogsByCatalogNumber(catno: string) {
+  const cachedData = await checkCache('catalog', catno);
+  if (cachedData) return cachedData;
+
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
 
@@ -177,7 +214,13 @@ export async function searchDiscogsByCatalogNumber(catno: string) {
     
     const data = await response.json();
     if (data.results && data.results.length > 0) {
-      return await getDiscogsReleaseDetails(data.results[0].id);
+      const details = await getDiscogsReleaseDetails(data.results[0].id);
+      
+      // We cache the final resolved details against the catalog number to save the double-hop next time
+      if (details && details.success) {
+        await setCache('catalog', catno, details);
+      }
+      return details;
     }
     return { error: "No records found for that catalog number." };
   } catch (error: any) {
