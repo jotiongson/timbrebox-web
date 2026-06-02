@@ -94,10 +94,6 @@ export default function VendorDashboard() {
   const [previewDetails, setPreviewDetails] = useState<any | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
 
-  const result = await searchDiscogsByBarcode(code, session.user.id);
-  const result = await searchDiscogsByCatalogNumber(catno, session.user.id);
-  const response = await searchDiscogsByText(textQuery, session.user.id);
-
   // --- TELEMETRY METRICS STATES ---
   const [metrics, setMetrics] = useState({
     total_requests: 0,
@@ -382,7 +378,8 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(true);
     setLookupError("");
     
-    const result = await searchDiscogsByBarcode(code);
+    // Pass session.user.id to log the vendor
+    const result = await searchDiscogsByBarcode(code, session?.user?.id);
     
     if (result?.success) {
       const newRecordData = {
@@ -411,7 +408,8 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(true);
     setLookupError("");
     
-    const result = await searchDiscogsByCatalogNumber(catno);
+    // Pass session.user.id to log the vendor
+    const result = await searchDiscogsByCatalogNumber(catno, session?.user?.id);
     
     if (result?.success) {
       const newRecordData = {
@@ -449,14 +447,14 @@ export default function VendorDashboard() {
     setIsSearchingText(true);
     
     try {
-      const response = await searchDiscogsByText(`${item.artist} ${item.title}`);
+      // Pass session.user.id to log the vendor
+      const response = await searchDiscogsByText(`${item.artist} ${item.title}`, session?.user?.id);
       if (response && response.success && response.results) {
         setSearchResults(response.results);
       }
     } catch (err) {
       setLookupError("Failed to re-match.");
     } finally {
-      // FORCE DASHBOARD TELEMETRY UPDATE AFTER RE-MATCH SEARCH COMPLETES
       await refreshTelemetry();
     }
     setIsSearchingText(false);
@@ -595,7 +593,8 @@ export default function VendorDashboard() {
     setPreviewDetails(null);
     
     try {
-      const response = await searchDiscogsByText(textQuery); 
+      // Pass session.user.id to log the vendor
+      const response = await searchDiscogsByText(textQuery, session?.user?.id); 
       if (response && response.success && response.results && response.results.length > 0) {
         setSearchResults(response.results);
       } else {
