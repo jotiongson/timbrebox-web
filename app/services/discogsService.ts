@@ -3,25 +3,19 @@
 import { supabase } from "../supabase";
 
 // Trace Helper: Using Date.now() and loud terminal logging
-async function writeTelemetryLog(type: string, value: string, isHit: boolean, startTime: number) {
+// Trace Helper: Now maps vendorId explicitly to the logging structure
+async function writeTelemetryLog(type: string, value: string, isHit: boolean, startTime: number, vendorId?: string) {
   try {
     const duration = Math.round(Date.now() - startTime);
     const safeValue = value.length > 100 ? value.substring(0, 97) + "..." : value;
-    
-    console.log(`[Telemetry] Attempting insert -> Type: ${type} | Hit: ${isHit} | Duration: ${duration}ms`);
 
-    const { error } = await supabase.from('api_call_logs').insert([{
+    await supabase.from('api_call_logs').insert([{
       query_type: type,
       query_value: safeValue, 
       cache_hit: isHit,
-      execution_duration_ms: duration
+      execution_duration_ms: duration,
+      vendor_id: vendorId || null
     }]);
-
-    if (error) {
-      console.error("🚨 [Telemetry Insert Blocked by Supabase]:", error.message, error.details);
-    } else {
-      console.log("[Telemetry] ✅ Successfully written to api_call_logs");
-    }
   } catch (err) {
     console.error("🚨 [Telemetry Execution Crash]:", err);
   }
