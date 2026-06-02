@@ -2,19 +2,22 @@
 
 import { supabase } from "../supabase";
 
-// Trace Helper to compute performance speeds and log metrics silently
+// Trace Helper: Switched to Date.now() and added explicit error trapping
 async function writeTelemetryLog(type: string, value: string, isHit: boolean, startTime: number) {
   try {
-    const duration = Math.round(performance.now() - startTime);
-    await supabase.from('api_call_logs').insert([{
+    const duration = Math.round(Date.now() - startTime);
+    const { error } = await supabase.from('api_call_logs').insert([{
       query_type: type,
-      query_value: value.length > 100 ? value.substring(0, 97) + "..." : value, // Keep querying parameter bounds clean
+      query_value: value.length > 100 ? value.substring(0, 97) + "..." : value, 
       cache_hit: isHit,
       execution_duration_ms: duration
     }]);
+
+    if (error) {
+      console.error("🚨 [Telemetry Insert Blocked by Supabase]:", error.message, error.details);
+    }
   } catch (err) {
-    // Fail silently so telemetry down-times never block actual user data lookups
-    console.error("[Telemetry Fail]:", err);
+    console.error("🚨 [Telemetry Execution Crash]:", err);
   }
 }
 
@@ -43,16 +46,24 @@ async function checkCache(queryType: string, queryValue: string) {
     .eq('query_value', queryValue)
     .single();
     
-  if (data && !error) return data.discogs_data;
+  if (error && error.code !== 'PGRST116') { // PGRST116 just means no rows found (cache miss), which is normal
+     console.error("🚨 [Cache Check Error]:", error.message);
+  }
+    
+  if (data) return data.discogs_data;
   return null;
 }
 
 async function setCache(queryType: string, queryValue: string, payload: any) {
-  await supabase.from('discogs_cache').insert([{
+  const { error } = await supabase.from('discogs_cache').insert([{
     query_type: queryType,
     query_value: queryValue,
     discogs_data: payload
   }]);
+
+  if (error) {
+    console.error("🚨 [Cache Insert Blocked by Supabase]:", error.message);
+  }
 }
 
 export async function searchDiscogsByBarcode(barcode: string) {
