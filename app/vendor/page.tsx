@@ -3,7 +3,13 @@
 import { useRouter } from 'next/navigation'; 
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase"; 
-import { searchDiscogsByBarcode, searchDiscogsByCatalogNumber, searchDiscogsByText, getDiscogsReleaseDetails } from "../services/discogsService";
+import { 
+  searchDiscogsByBarcode, 
+  searchDiscogsByCatalogNumber, 
+  searchDiscogsByText, 
+  getDiscogsReleaseDetails,
+  fetchLiveCacheMetrics
+} from "../services/discogsService";
 import BarcodeScanner from "../components/BarcodeScanner";
 import CatalogScanner from "../components/CatalogScanner";
 
@@ -88,6 +94,17 @@ export default function VendorDashboard() {
   const [previewDetails, setPreviewDetails] = useState<any | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
 
+  // --- TELEMETRY METRICS STATES ---
+  const [metrics, setMetrics] = useState({
+    total_requests: 0,
+    cache_hits: 0,
+    api_misses: 0,
+    efficiency_pct: 0,
+    avg_cache_ms: 0,
+    avg_api_ms: 0
+  });
+  const [showMetrics, setShowMetrics] = useState(false);
+
   // --- AUTH & FETCH EFFECT ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -96,6 +113,7 @@ export default function VendorDashboard() {
       if (session) {
         fetchInventory(session.user.id);
         fetchStoreProfile(session.user.id);
+        refreshTelemetry();
       }
     });
 
@@ -104,6 +122,7 @@ export default function VendorDashboard() {
       if (session) {
         fetchInventory(session.user.id);
         fetchStoreProfile(session.user.id);
+        refreshTelemetry();
       } else {
         setInventory([]);
         setStoreName("Your Store");
@@ -112,6 +131,13 @@ export default function VendorDashboard() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  async function refreshTelemetry() {
+    const res = await fetchLiveCacheMetrics();
+    if (res?.success && res.metrics) {
+      setMetrics(res.metrics);
+    }
+  }
 
   async function fetchStoreProfile(userId: string) {
     const { data } = await supabase
@@ -242,6 +268,7 @@ export default function VendorDashboard() {
         setFormData({ ...initialFormState, location: dataToSave.location });
         setBarcode("");
         fetchInventory(session.user.id);
+        await refreshTelemetry();
       }
     } else {
       const { error } = await supabase.from("inventory").insert([payload]);
@@ -250,6 +277,7 @@ export default function VendorDashboard() {
         setFormData({ ...initialFormState, location: dataToSave.location });
         setBarcode("");
         fetchInventory(session.user.id);
+        await refreshTelemetry();
       }
     }
     setIsUpdating(false);
@@ -369,6 +397,7 @@ export default function VendorDashboard() {
       await handlePipelineRouting(newRecordData);
     } else {
       setLookupError(result?.error || "Barcode lookup failed.");
+      await refreshTelemetry();
     }
     setIsSearchingDiscogs(false);
   };
@@ -398,6 +427,7 @@ export default function VendorDashboard() {
       setCatalog(""); 
     } else {
       setLookupError(result?.error || "Catalog lookup failed.");
+      await refreshTelemetry();
     }
     setIsSearchingDiscogs(false);
   };
@@ -446,6 +476,7 @@ export default function VendorDashboard() {
     } else {
       alert("Could not fetch preview: " + (result?.error || "Unknown Error"));
       setPreviewReleaseId(null);
+      await refreshTelemetry();
     }
     setIsFetchingPreview(false);
   };
@@ -479,6 +510,7 @@ export default function VendorDashboard() {
         setPreviewReleaseId(null);
         setPreviewDetails(null);
         setSearchResults([]);
+        await refreshTelemetry();
       }
     } else {
       const newRecordData = {
@@ -501,6 +533,7 @@ export default function VendorDashboard() {
       setPreviewReleaseId(null);
       setPreviewDetails(null);
       setSearchResults([]);
+      await refreshTelemetry();
     }
   };
 
@@ -564,6 +597,8 @@ export default function VendorDashboard() {
     } catch (err) {
       console.error("Text search failed:", err);
       setLookupError("Search failed. Check your API connection.");
+    } finally {
+      await refreshTelemetry();
     }
     
     setIsSearchingText(false);
@@ -643,6 +678,46 @@ export default function VendorDashboard() {
           )}
         </div>
       </header>
+
+      {/* --- TELEMETRY CACHE EFFICIENCY STRIP --- */}
+      <section className="mb-6 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+        <div 
+          className="flex justify-between items-center cursor-pointer select-none" 
+          onClick={() => { if(!showMetrics) refreshTelemetry(); setShowMetrics(!showMetrics); }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm">🛡️</span>
+            <span className="text-xs font-black text-gray-700 uppercase tracking-wider">Discogs API Rate Limit Shield</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${metrics.efficiency_pct > 75 ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-50 text-blue-700'}`}>
+              {metrics.efficiency_pct}% Deflection
+            </span>
+          </div>
+          <button type="button" className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition">
+            {showMetrics ? "Hide Telemetry ✕" : "View Live Diagnostics 📊"}
+          </button>
+        </div>
+
+        {showMetrics && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-100 animate-fade-in text-center">
+            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Total Operations</p>
+              <p className="text-lg font-black text-gray-800 mt-1">{metrics.total_requests}</p>
+            </div>
+            <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+              <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide">Deflected via Cache</p>
+              <p className="text-lg font-black text-emerald-600 mt-1">{metrics.cache_hits} <span className="text-[10px] text-emerald-400 font-normal">({metrics.avg_cache_ms}ms)</span></p>
+            </div>
+            <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-100">
+              <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">Actual API Costs</p>
+              <p className="text-lg font-black text-amber-600 mt-1">{metrics.api_misses} <span className="text-[10px] text-amber-400 font-normal">({metrics.avg_api_ms}ms)</span></p>
+            </div>
+            <div className="bg-gray-900 p-3 rounded-xl text-white">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">API Cost Reduction</p>
+              <p className="text-lg font-black text-emerald-400 mt-1">{metrics.efficiency_pct}%</p>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* --- MASTER SCAN/ADD BUTTON --- */}
       <section className="mb-6">
