@@ -298,3 +298,12 @@ export async function fetchAdminVendorMetrics() {
     return { success: false, error: error.message };
   }
 }
+
+export async function batchUpdatePrice(ids: number[], newPriceCents: number) {
+  const { error } = await supabase
+    .from('inventory')
+    .update({ price_cents: newPriceCents })
+    .in('id', ids);
+    
+  return { success: !error, error };
+}
