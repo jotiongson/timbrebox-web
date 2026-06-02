@@ -106,6 +106,9 @@ export default function VendorDashboard() {
   });
   const [showMetrics, setShowMetrics] = useState(false);
 
+  // --- BULK ACTION STATES ---
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
   // --- AUTH & FETCH EFFECT ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -450,7 +453,7 @@ export default function VendorDashboard() {
       }
     } catch (err) {
       setLookupError("Failed to re-match.");
-    } finaly: {
+    } finally {
       await refreshTelemetry();
     }
     setIsSearchingText(false);
@@ -600,6 +603,33 @@ export default function VendorDashboard() {
     }
     
     setIsSearchingText(false);
+  };
+
+  // --- BULK ACTION HELPERS ---
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => 
+      prev.length === filteredInventory.length ? [] : filteredInventory.map(i => i.id)
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Permanently delete ${selectedIds.length} records from your vault?`)) return;
+    setIsUpdating(true);
+    const { error } = await supabase.from('inventory').delete().in('id', selectedIds);
+    
+    if (error) {
+      alert("Error processing bulk deletion: " + error.message);
+    } else {
+      setSelectedIds([]);
+      fetchInventory(session.user.id);
+    }
+    setIsUpdating(false);
   };
 
   const uniqueLocations = Array.from(new Set(inventory.map(item => item.location || "").filter(Boolean))).sort();
@@ -767,9 +797,17 @@ export default function VendorDashboard() {
       {/* --- INVENTORY LIST --- */}
       <section className="mb-12 bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
         <div className="p-4 sm:p-6 border-b border-gray-100 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-lg font-black text-gray-900 tracking-tight">Collection</h2>
-            <p className="text-xs font-semibold text-gray-400 mt-0.5">Showing {filteredInventory.length} of {categoryInventory.length}</p>
+          <div className="flex items-center gap-3">
+            <input 
+              type="checkbox" 
+              checked={filteredInventory.length > 0 && selectedIds.length === filteredInventory.length}
+              onChange={toggleSelectAll}
+              className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+            />
+            <div>
+              <h2 className="text-lg font-black text-gray-900 tracking-tight">Collection</h2>
+              <p className="text-xs font-semibold text-gray-400 mt-0.5">Showing {filteredInventory.length} of {categoryInventory.length}</p>
+            </div>
           </div>
           
           <div className="w-full sm:w-64 relative">
@@ -795,34 +833,43 @@ export default function VendorDashboard() {
         ) : (
           <div className="divide-y divide-gray-100 flex flex-col w-full">
             {filteredInventory.map((album) => (
-              <div key={album.id} onClick={() => setViewItem(album)} className="p-3 sm:p-5 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group cursor-pointer">
-                {album.cover_image ? (
-                  <img src={album.cover_image} alt="cover" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl shadow-sm flex-shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-gray-200">
-                    <span className="text-lg opacity-30">💿</span>
-                  </div>
-                )}
+              <div key={album.id} className="p-3 sm:p-5 flex gap-3 sm:gap-4 items-center hover:bg-emerald-50 transition group">
+                <input 
+                  type="checkbox" 
+                  checked={selectedIds.includes(album.id)}
+                  onChange={() => toggleSelect(album.id)}
+                  className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                />
                 
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className="flex justify-between items-start mb-0.5">
-                    <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate pr-2">{album.title}</h3>
-                    <span className={`text-sm sm:text-base flex-shrink-0 ${album.price_cents > 0 ? 'font-black text-emerald-600' : 'font-medium text-gray-400'}`}>
-                      ${(album.price_cents / 100).toFixed(2)}
-                    </span>
-                  </div>
-                  <p className="text-gray-500 text-xs sm:text-sm font-medium truncate mb-1.5">{album.artist}</p>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {album.location ? (
-                       <span className="inline-flex items-center bg-gray-900 text-white text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">📍 {album.location}</span>
-                    ) : (
-                       <span className="inline-flex items-center bg-red-50 text-red-600 border border-red-100 text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">Unassigned</span>
-                    )}
-                    <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">{album.weight_grams}g</span>
-                    <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
-                    {album.market_price_cents && album.market_price_cents > 0 ? (
-                      <span className="inline-block bg-blue-50 text-blue-700 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Market: ${(album.market_price_cents / 100).toFixed(2)}</span>
-                    ) : null}
+                <div onClick={() => setViewItem(album)} className="flex-1 flex gap-3 sm:gap-4 items-center cursor-pointer min-w-0">
+                  {album.cover_image ? (
+                    <img src={album.cover_image} alt="cover" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl shadow-sm flex-shrink-0" />
+                  ) : (
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-gray-200">
+                      <span className="text-lg opacity-30">💿</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex justify-between items-start mb-0.5">
+                      <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-tight truncate pr-2">{album.title}</h3>
+                      <span className={`text-sm sm:text-base flex-shrink-0 ${album.price_cents > 0 ? 'font-black text-emerald-600' : 'font-medium text-gray-400'}`}>
+                        ${(album.price_cents / 100).toFixed(2)}
+                      </span>
+                    </div>
+                    <p className="text-gray-500 text-xs sm:text-sm font-medium truncate mb-1.5">{album.artist}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {album.location ? (
+                         <span className="inline-flex items-center bg-gray-900 text-white text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">📍 {album.location}</span>
+                      ) : (
+                         <span className="inline-flex items-center bg-red-50 text-red-600 border border-red-100 text-[9px] sm:text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold">Unassigned</span>
+                      )}
+                      <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">{album.weight_grams}g</span>
+                      <span className="inline-block bg-gray-100 text-gray-600 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">QTY: {album.quantity || 1}</span>
+                      {album.market_price_cents && album.market_price_cents > 0 ? (
+                        <span className="inline-block bg-blue-50 text-blue-700 text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Market: ${(album.market_price_cents / 100).toFixed(2)}</span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 
@@ -834,6 +881,28 @@ export default function VendorDashboard() {
           </div>
         )}
       </section>
+
+      {/* --- BULK ACTION FLOATING BAR --- */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-6 animate-fade-in border border-gray-700">
+          <span className="text-sm font-bold bg-gray-800 px-3 py-1 rounded-full">{selectedIds.length} Selected</span>
+          <div className="w-px h-6 bg-gray-700"></div>
+          <button 
+            onClick={handleBulkDelete}
+            disabled={isUpdating}
+            className="text-sm font-black text-red-400 hover:text-red-300 transition disabled:opacity-50"
+          >
+            {isUpdating ? '...' : 'Delete'}
+          </button>
+          <button 
+            onClick={() => setSelectedIds([])}
+            disabled={isUpdating}
+            className="text-sm font-bold text-gray-400 hover:text-white transition disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* --- RAPID INSERTION SCANNER MODAL --- */}
       {isScannerModalOpen && (
@@ -981,6 +1050,7 @@ export default function VendorDashboard() {
                                         </p>
                                       </div>
                                       <div className="bg-white p-2 border border-gray-100 rounded-lg">
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Vinyl Weight</p>
                                         <p className="text-sm font-black text-gray-800 mt-0.5">
                                           {previewDetails.weight ? `${previewDetails.weight}g` : '120g (Std)'}
                                         </p>
