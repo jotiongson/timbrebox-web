@@ -1,23 +1,57 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from 'next/navigation';
+import { supabase } from "../supabase"; 
 import { fetchAdminVendorMetrics } from "../services/discogsService";
 import Link from "next/link";
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [report, setReport] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    async function loadMetrics() {
+    async function checkAuthAndLoad() {
+      // 1. Check if user has an active session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        router.push('/login');
+        return;
+      }
+
+      // 2. Query the database to verify if this specific user has the admin flag
+      const { data: profile, error } = await supabase
+        .from('vendor_profiles')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+      if (error || !profile?.is_admin) {
+        alert("Access Denied: Admin privileges required.");
+        router.push('/vendor'); // Boot normal vendors back to their regular dashboard
+        return;
+      }
+
+      setIsAdmin(true);
+
+      // 3. User is authorized, safely load global network metrics
       const res = await fetchAdminVendorMetrics();
       if (res?.success && res.report) {
         setReport(res.report);
       }
       setLoading(false);
     }
-    loadMetrics();
-  }, []);
+
+    checkAuthAndLoad();
+  }, [router]);
+
+  // Prevent UI flashing while checking authentication
+  if (!isAdmin && loading) {
+    return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500 bg-gray-50">Verifying Admin Credentials...</div>;
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-6 sm:p-12 font-sans text-gray-900">
