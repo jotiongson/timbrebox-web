@@ -261,3 +261,14 @@ export async function searchDiscogsByCatalogNumber(catno: string) {
     return { error: "Failed to search Discogs API." };
   }
 }
+
+export async function fetchLiveCacheMetrics() {
+  try {
+    const { data, error } = await supabase.rpc('get_api_cache_metrics');
+    if (error) throw error;
+    return { success: true, metrics: data };
+  } catch (error: any) {
+    console.error("[RPC Metrics Error]:", error.message);
+    return { success: false, error: error.message };
+  }
+}
