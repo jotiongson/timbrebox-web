@@ -2,20 +2,27 @@
 
 import { supabase } from "../supabase";
 
-// Trace Helper: Using Date.now() and loud terminal logging
 // Trace Helper: Now maps vendorId explicitly to the logging structure
 async function writeTelemetryLog(type: string, value: string, isHit: boolean, startTime: number, vendorId?: string) {
   try {
     const duration = Math.round(Date.now() - startTime);
     const safeValue = value.length > 100 ? value.substring(0, 97) + "..." : value;
+    
+    console.log(`[Telemetry] Attempting insert -> Type: ${type} | Hit: ${isHit} | Duration: ${duration}ms | Vendor: ${vendorId || 'Unknown'}`);
 
-    await supabase.from('api_call_logs').insert([{
+    const { error } = await supabase.from('api_call_logs').insert([{
       query_type: type,
       query_value: safeValue, 
       cache_hit: isHit,
       execution_duration_ms: duration,
       vendor_id: vendorId || null
     }]);
+
+    if (error) {
+      console.error("🚨 [Telemetry Insert Blocked by Supabase]:", error.message, error.details);
+    } else {
+      console.log("[Telemetry] ✅ Successfully written to api_call_logs");
+    }
   } catch (err) {
     console.error("🚨 [Telemetry Execution Crash]:", err);
   }
@@ -59,12 +66,13 @@ async function setCache(queryType: string, queryValue: string, payload: any) {
   }
 }
 
-export async function searchDiscogsByBarcode(barcode: string) {
+// Updated to accept vendorId
+export async function searchDiscogsByBarcode(barcode: string, vendorId?: string) {
   const telemetryStart = Date.now();
   const cachedData = await checkCache('barcode', barcode);
   
   if (cachedData) {
-    await writeTelemetryLog('barcode', barcode, true, telemetryStart);
+    await writeTelemetryLog('barcode', barcode, true, telemetryStart, vendorId);
     return cachedData;
   }
 
@@ -125,11 +133,11 @@ export async function searchDiscogsByBarcode(barcode: string) {
       };
 
       await setCache('barcode', barcode, payload);
-      await writeTelemetryLog('barcode', barcode, false, telemetryStart);
+      await writeTelemetryLog('barcode', barcode, false, telemetryStart, vendorId);
       return payload;
     }
     
-    await writeTelemetryLog('barcode', `${barcode} (Not Found)`, false, telemetryStart);
+    await writeTelemetryLog('barcode', `${barcode} (Not Found)`, false, telemetryStart, vendorId);
     return { error: "No records found for this barcode." };
   } catch (error: any) {
     console.error("[Discogs] API Error:", error.message);
@@ -137,12 +145,13 @@ export async function searchDiscogsByBarcode(barcode: string) {
   }
 }
 
-export async function searchDiscogsByText(query: string) {
+// Updated to accept vendorId
+export async function searchDiscogsByText(query: string, vendorId?: string) {
   const telemetryStart = Date.now();
   const cachedData = await checkCache('text_search', query);
   
   if (cachedData) {
-    await writeTelemetryLog('text_search', query, true, telemetryStart);
+    await writeTelemetryLog('text_search', query, true, telemetryStart, vendorId);
     return cachedData;
   }
 
@@ -166,7 +175,7 @@ export async function searchDiscogsByText(query: string) {
 
     const payload = { success: true, results: mappedResults };
     await setCache('text_search', query, payload);
-    await writeTelemetryLog('text_search', query, false, telemetryStart);
+    await writeTelemetryLog('text_search', query, false, telemetryStart, vendorId);
     return payload;
 
   } catch (error: any) {
@@ -175,12 +184,13 @@ export async function searchDiscogsByText(query: string) {
   }
 }
 
-export async function getDiscogsReleaseDetails(releaseId: number) {
+// Updated to accept vendorId
+export async function getDiscogsReleaseDetails(releaseId: number, vendorId?: string) {
   const telemetryStart = Date.now();
   const cachedData = await checkCache('release_details', releaseId.toString());
   
   if (cachedData) {
-    await writeTelemetryLog('release_details', releaseId.toString(), true, telemetryStart);
+    await writeTelemetryLog('release_details', releaseId.toString(), true, telemetryStart, vendorId);
     return cachedData;
   }
 
@@ -216,7 +226,7 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
     };
 
     await setCache('release_details', releaseId.toString(), payload);
-    await writeTelemetryLog('release_details', releaseId.toString(), false, telemetryStart);
+    await writeTelemetryLog('release_details', releaseId.toString(), false, telemetryStart, vendorId);
     return payload;
 
   } catch (error: any) {
@@ -225,12 +235,13 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
   }
 }
 
-export async function searchDiscogsByCatalogNumber(catno: string) {
+// Updated to accept vendorId
+export async function searchDiscogsByCatalogNumber(catno: string, vendorId?: string) {
   const telemetryStart = Date.now();
   const cachedData = await checkCache('catalog', catno);
   
   if (cachedData) {
-    await writeTelemetryLog('catalog', catno, true, telemetryStart);
+    await writeTelemetryLog('catalog', catno, true, telemetryStart, vendorId);
     return cachedData;
   }
 
@@ -248,16 +259,17 @@ export async function searchDiscogsByCatalogNumber(catno: string) {
     const data = await response.json();
     
     if (data.results && data.results.length > 0) {
-      const details = await getDiscogsReleaseDetails(data.results[0].id);
+      // Pass vendorId down through the nested detail check
+      const details = await getDiscogsReleaseDetails(data.results[0].id, vendorId);
       
       if (details && details.success) {
         await setCache('catalog', catno, details);
       }
-      await writeTelemetryLog('catalog', catno, false, telemetryStart);
+      await writeTelemetryLog('catalog', catno, false, telemetryStart, vendorId);
       return details;
     }
     
-    await writeTelemetryLog('catalog', `${catno} (Not Found)`, false, telemetryStart);
+    await writeTelemetryLog('catalog', `${catno} (Not Found)`, false, telemetryStart, vendorId);
     return { error: "No records found for that catalog number." };
   } catch (error: any) {
     console.error("[Discogs] Catalog Search Error:", error.message);
