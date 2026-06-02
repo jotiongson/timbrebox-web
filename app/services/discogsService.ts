@@ -275,3 +275,14 @@ export async function fetchLiveCacheMetrics() {
     return { success: false, error: error.message };
   }
 }
+
+export async function fetchAdminVendorMetrics() {
+  try {
+    const { data, error } = await supabase.rpc('get_admin_vendor_metrics');
+    if (error) throw error;
+    return { success: true, report: data };
+  } catch (error: any) {
+    console.error("[Admin RPC Error]:", error.message);
+    return { success: false, error: error.message };
+  }
+}
