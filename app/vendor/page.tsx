@@ -94,6 +94,10 @@ export default function VendorDashboard() {
   const [previewDetails, setPreviewDetails] = useState<any | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
 
+  const result = await searchDiscogsByBarcode(code, session.user.id);
+  const result = await searchDiscogsByCatalogNumber(catno, session.user.id);
+  const response = await searchDiscogsByText(textQuery, session.user.id);
+
   // --- TELEMETRY METRICS STATES ---
   const [metrics, setMetrics] = useState({
     total_requests: 0,
