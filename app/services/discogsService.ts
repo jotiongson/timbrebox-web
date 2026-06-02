@@ -2,6 +2,22 @@
 
 import { supabase } from "../supabase";
 
+// Trace Helper to compute performance speeds and log metrics silently
+async function writeTelemetryLog(type: string, value: string, isHit: boolean, startTime: number) {
+  try {
+    const duration = Math.round(performance.now() - startTime);
+    await supabase.from('api_call_logs').insert([{
+      query_type: type,
+      query_value: value.length > 100 ? value.substring(0, 97) + "..." : value, // Keep querying parameter bounds clean
+      cache_hit: isHit,
+      execution_duration_ms: duration
+    }]);
+  } catch (err) {
+    // Fail silently so telemetry down-times never block actual user data lookups
+    console.error("[Telemetry Fail]:", err);
+  }
+}
+
 // Helper function to dig through Discogs format quirks and find the weight
 function extractWeightFromFormats(formats: any[]): string {
   if (!formats || formats.length === 0) return '';
@@ -19,7 +35,6 @@ function extractWeightFromFormats(formats: any[]): string {
   return '';
 }
 
-// Helper function to check and set cache
 async function checkCache(queryType: string, queryValue: string) {
   const { data, error } = await supabase
     .from('discogs_cache')
@@ -41,14 +56,16 @@ async function setCache(queryType: string, queryValue: string, payload: any) {
 }
 
 export async function searchDiscogsByBarcode(barcode: string) {
+  const telemetryStart = performance.now();
   const cachedData = await checkCache('barcode', barcode);
-  if (cachedData) return cachedData;
+  
+  if (cachedData) {
+    await writeTelemetryLog('barcode', barcode, true, telemetryStart);
+    return cachedData;
+  }
 
   const token = process.env.DISCOGS_PAT;
-  if (!token) {
-    console.error("[Discogs] Token missing from environment variables.");
-    return { error: "Server configuration error." };
-  }
+  if (!token) return { error: "Server configuration error." };
 
   const searchUrl = `https://api.discogs.com/database/search?barcode=${barcode}&type=release&token=${token}`;
 
@@ -57,8 +74,7 @@ export async function searchDiscogsByBarcode(barcode: string) {
       headers: { 'User-Agent': 'TimbreBoxApp/1.0 +https://timbrebox-web.vercel.app' }
     });
 
-    if (!searchResponse.ok) throw new Error(`Discogs Search API responded with status: ${searchResponse.status}`);
-
+    if (!searchResponse.ok) throw new Error(`Status: ${searchResponse.status}`);
     const searchData = await searchResponse.json();
 
     if (searchData.results && searchData.results.length > 0) {
@@ -106,8 +122,11 @@ export async function searchDiscogsByBarcode(barcode: string) {
       };
 
       await setCache('barcode', barcode, payload);
+      await writeTelemetryLog('barcode', barcode, false, telemetryStart);
       return payload;
     }
+    
+    await writeTelemetryLog('barcode', `${barcode} (Not Found)`, false, telemetryStart);
     return { error: "No records found for this barcode." };
   } catch (error: any) {
     console.error("[Discogs] API Error:", error.message);
@@ -116,8 +135,13 @@ export async function searchDiscogsByBarcode(barcode: string) {
 }
 
 export async function searchDiscogsByText(query: string) {
+  const telemetryStart = performance.now();
   const cachedData = await checkCache('text_search', query);
-  if (cachedData) return cachedData;
+  
+  if (cachedData) {
+    await writeTelemetryLog('text_search', query, true, telemetryStart);
+    return cachedData;
+  }
 
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
@@ -130,18 +154,16 @@ export async function searchDiscogsByText(query: string) {
     });
     
     if (!response.ok) throw new Error(`Status: ${response.status}`);
-    
     const data = await response.json();
     
-    const mappedResults = (data.results || []).map((res: any) => {
-       return {
-         ...res,
-         lowest_price: res.lowest_price || null 
-       }
-    });
+    const mappedResults = (data.results || []).map((res: any) => ({
+      ...res,
+      lowest_price: res.lowest_price || null 
+    }));
 
     const payload = { success: true, results: mappedResults };
     await setCache('text_search', query, payload);
+    await writeTelemetryLog('text_search', query, false, telemetryStart);
     return payload;
 
   } catch (error: any) {
@@ -151,8 +173,13 @@ export async function searchDiscogsByText(query: string) {
 }
 
 export async function getDiscogsReleaseDetails(releaseId: number) {
+  const telemetryStart = performance.now();
   const cachedData = await checkCache('release_details', releaseId.toString());
-  if (cachedData) return cachedData;
+  
+  if (cachedData) {
+    await writeTelemetryLog('release_details', releaseId.toString(), true, telemetryStart);
+    return cachedData;
+  }
 
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
@@ -165,12 +192,10 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
     });
     
     if (!response.ok) throw new Error(`Status: ${response.status}`);
-    
     const data = await response.json();
     
     const rawArtist = data.artists && data.artists.length > 0 ? data.artists[0].name : 'Unknown Artist';
     const cleanArtist = rawArtist.replace(/\s\(\d+\)$/, '');
-    
     const extractedWeight = extractWeightFromFormats(data.formats);
     
     const payload = {
@@ -188,6 +213,7 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
     };
 
     await setCache('release_details', releaseId.toString(), payload);
+    await writeTelemetryLog('release_details', releaseId.toString(), false, telemetryStart);
     return payload;
 
   } catch (error: any) {
@@ -197,8 +223,13 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
 }
 
 export async function searchDiscogsByCatalogNumber(catno: string) {
+  const telemetryStart = performance.now();
   const cachedData = await checkCache('catalog', catno);
-  if (cachedData) return cachedData;
+  
+  if (cachedData) {
+    await writeTelemetryLog('catalog', catno, true, telemetryStart);
+    return cachedData;
+  }
 
   const token = process.env.DISCOGS_PAT;
   if (!token) return { error: "Server configuration error." };
@@ -211,17 +242,19 @@ export async function searchDiscogsByCatalogNumber(catno: string) {
     });
     
     if (!response.ok) throw new Error(`Status: ${response.status}`);
-    
     const data = await response.json();
+    
     if (data.results && data.results.length > 0) {
       const details = await getDiscogsReleaseDetails(data.results[0].id);
       
-      // We cache the final resolved details against the catalog number to save the double-hop next time
       if (details && details.success) {
         await setCache('catalog', catno, details);
       }
+      await writeTelemetryLog('catalog', catno, false, telemetryStart);
       return details;
     }
+    
+    await writeTelemetryLog('catalog', `${catno} (Not Found)`, false, telemetryStart);
     return { error: "No records found for that catalog number." };
   } catch (error: any) {
     console.error("[Discogs] Catalog Search Error:", error.message);
