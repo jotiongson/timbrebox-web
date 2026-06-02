@@ -31,6 +31,21 @@ interface InventoryItem {
   cover_image?: string;
 }
 
+interface BuyerLead {
+  id: string;
+  record_id: number;
+  vendor_id: string;
+  guest_email: string;
+  status: string;
+  created_at: string;
+  inventory: {
+    title: string;
+    artist: string;
+    cover_image: string;
+    price_cents: number;
+  };
+}
+
 const initialFormState = {
   title: "",
   artist: "",
@@ -55,6 +70,10 @@ export default function VendorDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // --- INBOX STATES ---
+  const [leads, setLeads] = useState<BuyerLead[]>([]);
+  const [isInboxOpen, setIsInboxOpen] = useState(false);
+
   const [formData, setFormData] = useState(initialFormState); 
   const [barcode, setBarcode] = useState("");
   const [catalog, setCatalog] = useState(""); 
@@ -117,6 +136,7 @@ export default function VendorDashboard() {
       if (session) {
         fetchInventory(session.user.id);
         fetchStoreProfile(session.user.id);
+        fetchLeads(session.user.id);
         refreshTelemetry();
       }
     });
@@ -126,9 +146,11 @@ export default function VendorDashboard() {
       if (session) {
         fetchInventory(session.user.id);
         fetchStoreProfile(session.user.id);
+        fetchLeads(session.user.id);
         refreshTelemetry();
       } else {
         setInventory([]);
+        setLeads([]);
         setStoreName("Your Store");
         setIsAdmin(false);
       }
@@ -136,6 +158,31 @@ export default function VendorDashboard() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  async function fetchLeads(vendorId: string) {
+    const { data, error } = await supabase
+      .from("buyer_leads")
+      .select("*, inventory(title, artist, cover_image, price_cents)")
+      .eq("vendor_id", vendorId)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      setLeads(data as any[]);
+    }
+  }
+
+  async function updateLeadStatus(leadId: string, newStatus: string) {
+    const { error } = await supabase
+      .from('buyer_leads')
+      .update({ status: newStatus })
+      .eq('id', leadId);
+
+    if (!error) {
+      setLeads(leads.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
+    } else {
+      alert("Failed to update status.");
+    }
+  }
 
   async function refreshTelemetry() {
     const res = await fetchLiveCacheMetrics();
@@ -654,6 +701,9 @@ export default function VendorDashboard() {
       (album.tracklist && Array.isArray(album.tracklist) && album.tracklist.some((track: any) => track.title && track.title.toLowerCase().includes(searchLower)));
   });
 
+  // Calculate unread leads
+  const unreadLeadsCount = leads.filter(l => l.status === 'new').length;
+
   if (isAuthLoading) {
     return <div className="min-h-screen flex items-center justify-center font-bold text-gray-500">Unlocking Account...</div>;
   }
@@ -686,7 +736,21 @@ export default function VendorDashboard() {
           </div>
         </div>
         
-        <div className="relative z-30">
+        <div className="flex items-center gap-3 relative z-30">
+          
+          {/* INBOX BUTTON */}
+          <button 
+            onClick={() => setIsInboxOpen(true)}
+            className="relative w-10 h-10 bg-white border border-gray-200 hover:bg-gray-50 rounded-full flex items-center justify-center text-lg transition shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            📨
+            {unreadLeadsCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm">
+                {unreadLeadsCount}
+              </span>
+            )}
+          </button>
+
           <button 
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
             className="w-10 h-10 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full flex items-center justify-center text-lg transition shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -697,18 +761,96 @@ export default function VendorDashboard() {
           {isProfileMenuOpen && (
             <>
               <div className="fixed inset-0" onClick={() => setIsProfileMenuOpen(false)}></div>
-              <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
+              <div className="absolute right-0 mt-12 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
                 {isAdmin && (
                   <a href="/admin" className="px-5 py-3.5 text-sm font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border-b border-gray-50 transition flex items-center gap-2">🛡️ Admin Panel</a>
                 )}
                 <a href="/vendor/settings" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">⚙️ Settings</a>
-                <a href="/" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">📡 View Radar</a>
+                <a href="/radar" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">📡 View Radar</a>
                 <button onClick={() => supabase.auth.signOut()} className="px-5 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 text-left transition flex items-center gap-2">🚪 Sign Out</button>
               </div>
             </>
           )}
         </div>
       </header>
+
+      {/* --- BUYER LEADS INBOX MODAL --- */}
+      {isInboxOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
+            
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📨</span>
+                <h3 className="font-black text-gray-900 text-lg tracking-tight">Buyer Requests</h3>
+              </div>
+              <button onClick={() => setIsInboxOpen(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">✕</button>
+            </div>
+            
+            <div className="p-0 overflow-y-auto bg-gray-50 flex-1">
+              {leads.length === 0 ? (
+                <div className="p-16 text-center text-gray-400 font-medium">
+                  <div className="text-4xl mb-3 opacity-30">📭</div>
+                  No buyer requests yet. Make sure you have items priced above $0.00 on the radar!
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {leads.map((lead) => (
+                    <div key={lead.id} className={`p-5 flex flex-col sm:flex-row gap-4 transition ${lead.status === 'new' ? 'bg-white' : 'bg-gray-50 opacity-80'}`}>
+                      
+                      {/* Record Snippet */}
+                      <div className="flex gap-3 flex-1 min-w-0">
+                        {lead.inventory?.cover_image ? (
+                          <img src={lead.inventory.cover_image} alt="cover" className="w-14 h-14 object-cover rounded-lg shadow-sm border border-gray-200 flex-shrink-0" />
+                        ) : (
+                          <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200 flex-shrink-0">💿</div>
+                        )}
+                        <div className="flex flex-col justify-center min-w-0">
+                          <h4 className="font-bold text-gray-900 text-sm truncate">{lead.inventory?.title || "Record Deleted"}</h4>
+                          <p className="text-xs text-gray-500 font-medium truncate mb-1">{lead.inventory?.artist || "Unknown"}</p>
+                          <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded w-fit border border-emerald-100">
+                            ${((lead.inventory?.price_cents || 0) / 100).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Lead Details & Actions */}
+                      <div className="flex flex-col justify-center gap-2 sm:items-end">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-md border border-gray-200">
+                            {lead.guest_email}
+                          </span>
+                          <button 
+                            onClick={() => { navigator.clipboard.writeText(lead.guest_email); alert('Email copied!'); }}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-bold"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {lead.status === 'new' && (
+                            <>
+                              <button onClick={() => updateLeadStatus(lead.id, 'contacted')} className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition">Mark Contacted</button>
+                              <button onClick={() => updateLeadStatus(lead.id, 'resolved')} className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition">Mark Sold</button>
+                            </>
+                          )}
+                          {lead.status === 'contacted' && (
+                            <button onClick={() => updateLeadStatus(lead.id, 'resolved')} className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition">Complete Sale</button>
+                          )}
+                          {lead.status === 'resolved' && (
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resolved ✓</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- TELEMETRY CACHE EFFICIENCY STRIP (ADMIN ONLY) --- */}
       {isAdmin && (
