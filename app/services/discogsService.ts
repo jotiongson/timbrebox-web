@@ -2,39 +2,39 @@
 
 import { supabase } from "../supabase";
 
-// Trace Helper: Switched to Date.now() and added explicit error trapping
+// Trace Helper: Using Date.now() and loud terminal logging
 async function writeTelemetryLog(type: string, value: string, isHit: boolean, startTime: number) {
   try {
     const duration = Math.round(Date.now() - startTime);
+    const safeValue = value.length > 100 ? value.substring(0, 97) + "..." : value;
+    
+    console.log(`[Telemetry] Attempting insert -> Type: ${type} | Hit: ${isHit} | Duration: ${duration}ms`);
+
     const { error } = await supabase.from('api_call_logs').insert([{
       query_type: type,
-      query_value: value.length > 100 ? value.substring(0, 97) + "..." : value, 
+      query_value: safeValue, 
       cache_hit: isHit,
       execution_duration_ms: duration
     }]);
 
     if (error) {
       console.error("🚨 [Telemetry Insert Blocked by Supabase]:", error.message, error.details);
+    } else {
+      console.log("[Telemetry] ✅ Successfully written to api_call_logs");
     }
   } catch (err) {
     console.error("🚨 [Telemetry Execution Crash]:", err);
   }
 }
 
-// Helper function to dig through Discogs format quirks and find the weight
 function extractWeightFromFormats(formats: any[]): string {
   if (!formats || formats.length === 0) return '';
-  
   const format = formats[0];
   const descriptions = format.descriptions || [];
   const text = format.text || ""; 
-
   const combinedText = [...descriptions, text].join(" ").toLowerCase();
   const weightMatch = combinedText.match(/(\d+)\s*(g|gram)/);
-  
-  if (weightMatch) {
-    return weightMatch[1]; 
-  }
+  if (weightMatch) return weightMatch[1]; 
   return '';
 }
 
@@ -46,10 +46,9 @@ async function checkCache(queryType: string, queryValue: string) {
     .eq('query_value', queryValue)
     .single();
     
-  if (error && error.code !== 'PGRST116') { // PGRST116 just means no rows found (cache miss), which is normal
+  if (error && error.code !== 'PGRST116') { 
      console.error("🚨 [Cache Check Error]:", error.message);
   }
-    
   if (data) return data.discogs_data;
   return null;
 }
@@ -67,7 +66,7 @@ async function setCache(queryType: string, queryValue: string, payload: any) {
 }
 
 export async function searchDiscogsByBarcode(barcode: string) {
-  const telemetryStart = performance.now();
+  const telemetryStart = Date.now();
   const cachedData = await checkCache('barcode', barcode);
   
   if (cachedData) {
@@ -115,7 +114,6 @@ export async function searchDiscogsByBarcode(barcode: string) {
         year = releaseData.year || year;
         genres = releaseData.genres || genres;
         marketPrice = releaseData.lowest_price || null; 
-        
         extractedWeight = extractWeightFromFormats(releaseData.formats);
       }
 
@@ -146,7 +144,7 @@ export async function searchDiscogsByBarcode(barcode: string) {
 }
 
 export async function searchDiscogsByText(query: string) {
-  const telemetryStart = performance.now();
+  const telemetryStart = Date.now();
   const cachedData = await checkCache('text_search', query);
   
   if (cachedData) {
@@ -184,7 +182,7 @@ export async function searchDiscogsByText(query: string) {
 }
 
 export async function getDiscogsReleaseDetails(releaseId: number) {
-  const telemetryStart = performance.now();
+  const telemetryStart = Date.now();
   const cachedData = await checkCache('release_details', releaseId.toString());
   
   if (cachedData) {
@@ -234,7 +232,7 @@ export async function getDiscogsReleaseDetails(releaseId: number) {
 }
 
 export async function searchDiscogsByCatalogNumber(catno: string) {
-  const telemetryStart = performance.now();
+  const telemetryStart = Date.now();
   const cachedData = await checkCache('catalog', catno);
   
   if (cachedData) {
