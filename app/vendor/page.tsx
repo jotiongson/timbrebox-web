@@ -451,6 +451,9 @@ export default function VendorDashboard() {
       }
     } catch (err) {
       setLookupError("Failed to re-match.");
+    } finally {
+      // FORCE DASHBOARD TELEMETRY UPDATE AFTER RE-MATCH SEARCH COMPLETES
+      await refreshTelemetry();
     }
     setIsSearchingText(false);
   };
