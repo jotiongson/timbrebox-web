@@ -471,7 +471,7 @@ export default function VendorDashboard() {
     setPreviewDetails(null);
     setIsFetchingPreview(true);
 
-    const result = await getDiscogsReleaseDetails(releaseId);
+    const result = await getDiscogsReleaseDetails(releaseId, session?.user?.id);
     if (result?.success) {
       setPreviewDetails(result);
     } else {
