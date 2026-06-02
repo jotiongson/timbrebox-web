@@ -50,6 +50,7 @@ export default function VendorDashboard() {
   const [session, setSession] = useState<any>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [storeName, setStoreName] = useState("Your Store");
+  const [isAdmin, setIsAdmin] = useState(false);
   
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,6 +127,7 @@ export default function VendorDashboard() {
       } else {
         setInventory([]);
         setStoreName("Your Store");
+        setIsAdmin(false);
       }
     });
 
@@ -142,12 +144,13 @@ export default function VendorDashboard() {
   async function fetchStoreProfile(userId: string) {
     const { data } = await supabase
       .from("vendor_profiles")
-      .select("store_name")
+      .select("store_name, is_admin")
       .eq("id", userId)
       .single();
     
-    if (data && data.store_name) {
-      setStoreName(data.store_name);
+    if (data) {
+      if (data.store_name) setStoreName(data.store_name);
+      setIsAdmin(!!data.is_admin);
     }
   }
 
@@ -378,7 +381,6 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(true);
     setLookupError("");
     
-    // Pass session.user.id to log the vendor
     const result = await searchDiscogsByBarcode(code, session?.user?.id);
     
     if (result?.success) {
@@ -408,7 +410,6 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(true);
     setLookupError("");
     
-    // Pass session.user.id to log the vendor
     const result = await searchDiscogsByCatalogNumber(catno, session?.user?.id);
     
     if (result?.success) {
@@ -434,27 +435,22 @@ export default function VendorDashboard() {
     setIsSearchingDiscogs(false);
   };
 
-  // --- UPGRADED: RE-MATCH CARRIES FORWARD LOCATION INFO INTO THE MODAL POPUP ---
   const handleRematchRelease = async (item: InventoryItem) => {
     setViewItem(null);
-    
-    // 1. Sync the active layout location state to match the record's existing bin assignment
     setFormData(prev => ({ ...prev, location: item.location || "" }));
-    
-    setTextQuery(`${item.artist} ${item.title}`);
+    textQuery ? void 0 : setTextQuery(`${item.artist} ${item.title}`);
     setIsScannerModalOpen(true);
     setScanTab('text');
     setIsSearchingText(true);
     
     try {
-      // Pass session.user.id to log the vendor
       const response = await searchDiscogsByText(`${item.artist} ${item.title}`, session?.user?.id);
       if (response && response.success && response.results) {
         setSearchResults(response.results);
       }
     } catch (err) {
       setLookupError("Failed to re-match.");
-    } finally {
+    } finaly: {
       await refreshTelemetry();
     }
     setIsSearchingText(false);
@@ -486,7 +482,6 @@ export default function VendorDashboard() {
     setIsFetchingPreview(false);
   };
 
-  // --- UPGRADED: COMMITTING CLOSES ALL POPUPS IMMEDIATELY ---
   const handleSelectFromPreview = async () => {
     if (!previewDetails) return;
 
@@ -510,7 +505,6 @@ export default function VendorDashboard() {
       
       if (!error) {
         fetchInventory(session.user.id);
-        // Clean close sequence
         setIsScannerModalOpen(false);
         setPreviewReleaseId(null);
         setPreviewDetails(null);
@@ -531,9 +525,8 @@ export default function VendorDashboard() {
         identifiers: previewDetails.identifiers || []
       };
       
-      await executeSave(newRecordData); // Run direct save sequence
+      await executeSave(newRecordData); 
       
-      // Clean close sequence right back to the master dashboard page
       setIsScannerModalOpen(false);
       setPreviewReleaseId(null);
       setPreviewDetails(null);
@@ -593,7 +586,6 @@ export default function VendorDashboard() {
     setPreviewDetails(null);
     
     try {
-      // Pass session.user.id to log the vendor
       const response = await searchDiscogsByText(textQuery, session?.user?.id); 
       if (response && response.success && response.results && response.results.length > 0) {
         setSearchResults(response.results);
@@ -676,6 +668,9 @@ export default function VendorDashboard() {
             <>
               <div className="fixed inset-0" onClick={() => setIsProfileMenuOpen(false)}></div>
               <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
+                {isAdmin && (
+                  <a href="/admin" className="px-5 py-3.5 text-sm font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border-b border-gray-50 transition flex items-center gap-2">🛡️ Admin Panel</a>
+                )}
                 <a href="/vendor/settings" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">⚙️ Settings</a>
                 <a href="/" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">📡 View Radar</a>
                 <button onClick={() => supabase.auth.signOut()} className="px-5 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 text-left transition flex items-center gap-2">🚪 Sign Out</button>
@@ -685,45 +680,47 @@ export default function VendorDashboard() {
         </div>
       </header>
 
-      {/* --- TELEMETRY CACHE EFFICIENCY STRIP --- */}
-      <section className="mb-6 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-        <div 
-          className="flex justify-between items-center cursor-pointer select-none" 
-          onClick={() => { if(!showMetrics) refreshTelemetry(); setShowMetrics(!showMetrics); }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-sm">🛡️</span>
-            <span className="text-xs font-black text-gray-700 uppercase tracking-wider">Discogs API Rate Limit Shield</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${metrics.efficiency_pct > 75 ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-50 text-blue-700'}`}>
-              {metrics.efficiency_pct}% Deflection
-            </span>
+      {/* --- TELEMETRY CACHE EFFICIENCY STRIP (ADMIN ONLY) --- */}
+      {isAdmin && (
+        <section className="mb-6 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm animate-fade-in">
+          <div 
+            className="flex justify-between items-center cursor-pointer select-none" 
+            onClick={() => { if(!showMetrics) refreshTelemetry(); setShowMetrics(!showMetrics); }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🛡️</span>
+              <span className="text-xs font-black text-gray-700 uppercase tracking-wider">Discogs API Rate Limit Shield</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${metrics.efficiency_pct > 75 ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-50 text-blue-700'}`}>
+                {metrics.efficiency_pct}% Deflection
+              </span>
+            </div>
+            <button type="button" className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition">
+              {showMetrics ? "Hide Telemetry ✕" : "View Live Diagnostics 📊"}
+            </button>
           </div>
-          <button type="button" className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition">
-            {showMetrics ? "Hide Telemetry ✕" : "View Live Diagnostics 📊"}
-          </button>
-        </div>
 
-        {showMetrics && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-100 animate-fade-in text-center">
-            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Total Operations</p>
-              <p className="text-lg font-black text-gray-800 mt-1">{metrics.total_requests}</p>
+          {showMetrics && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-100 animate-fade-in text-center">
+              <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Total Operations</p>
+                <p className="text-lg font-black text-gray-800 mt-1">{metrics.total_requests}</p>
+              </div>
+              <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+                <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide">Deflected via Cache</p>
+                <p className="text-lg font-black text-emerald-600 mt-1">{metrics.cache_hits} <span className="text-[10px] text-emerald-400 font-normal">({metrics.avg_cache_ms}ms)</span></p>
+              </div>
+              <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-100">
+                <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">Actual API Costs</p>
+                <p className="text-lg font-black text-amber-600 mt-1">{metrics.api_misses} <span className="text-[10px] text-amber-400 font-normal">({metrics.avg_api_ms}ms)</span></p>
+              </div>
+              <div className="bg-gray-900 p-3 rounded-xl text-white">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">API Cost Reduction</p>
+                <p className="text-lg font-black text-emerald-400 mt-1">{metrics.efficiency_pct}%</p>
+              </div>
             </div>
-            <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
-              <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide">Deflected via Cache</p>
-              <p className="text-lg font-black text-emerald-600 mt-1">{metrics.cache_hits} <span className="text-[10px] text-emerald-400 font-normal">({metrics.avg_cache_ms}ms)</span></p>
-            </div>
-            <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-100">
-              <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">Actual API Costs</p>
-              <p className="text-lg font-black text-amber-600 mt-1">{metrics.api_misses} <span className="text-[10px] text-amber-400 font-normal">({metrics.avg_api_ms}ms)</span></p>
-            </div>
-            <div className="bg-gray-900 p-3 rounded-xl text-white">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">API Cost Reduction</p>
-              <p className="text-lg font-black text-emerald-400 mt-1">{metrics.efficiency_pct}%</p>
-            </div>
-          </div>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
       {/* --- MASTER SCAN/ADD BUTTON --- */}
       <section className="mb-6">
@@ -984,7 +981,6 @@ export default function VendorDashboard() {
                                         </p>
                                       </div>
                                       <div className="bg-white p-2 border border-gray-100 rounded-lg">
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Vinyl Weight</p>
                                         <p className="text-sm font-black text-gray-800 mt-0.5">
                                           {previewDetails.weight ? `${previewDetails.weight}g` : '120g (Std)'}
                                         </p>
