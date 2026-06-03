@@ -1,239 +1,258 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { supabase } from './supabase'; // Adjust path if your client is elsewhere
+import { useState, useEffect } from "react";
+import { supabase } from "./supabase"; // Adjust path if your supabase client is elsewhere
+import Link from "next/link";
 
-// TypeScript definitions for our new grouped data
-interface VinylRecord {
+interface PublicRecord {
   id: number;
-  title: string;
+  vendor_id: string;
   artist: string;
-  price_cents: number;
+  title: string;
   weight_grams: number;
+  price_cents: number;
+  market_price_cents?: number;
   condition: string;
-  quantity: number;
+  year?: string;
+  cover_image?: string;
+  tracklist?: any[];
   location?: string;
-  cover_image?: string; // Prepared for future image support
 }
 
-interface Store {
-  store_id: string;
-  store_name: string;
-  store_bio: string;
-  distance_miles: number;
-  active_records: VinylRecord[];
-}
+export default function MasterLandingPage() {
+  const [records, setRecords] = useState<PublicRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
-export default function PublicRadar() {
-  const [stores, setStores] = useState<Store[]>([]);
-  const [scanning, setScanning] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  // Modal States
+  const [viewItem, setViewItem] = useState<PublicRecord | null>(null);
+  const [showLeadModal, setShowLeadModal] = useState(false);
   
-  // NEW STATE: Tracks which record the user is currently inspecting
-  const [inspectingRecord, setInspectingRecord] = useState<VinylRecord | null>(null);
-  const [galleryImages, setGalleryImages] = useState<any[]>([]);
+  // Lead Form States
+  const [guestEmail, setGuestEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [leadSuccess, setLeadSuccess] = useState(false);
 
-  // FETCH GALLERY IMAGES WHEN INSPECTOR OPENS
   useEffect(() => {
-    if (inspectingRecord) {
-      const fetchImages = async () => {
-        const { data } = await supabase
-          .from('record_images')
-          .select('*')
-          .eq('record_id', inspectingRecord.id)
-          .order('created_at', { ascending: true });
-        
-        setGalleryImages(data || []);
-      };
-      fetchImages();
+    fetchPublicRadar();
+  }, []);
+
+  async function fetchPublicRadar() {
+    setLoading(true);
+    // Only fetch records where the price is strictly greater than 0
+    const { data, error } = await supabase
+      .from("inventory")
+      .select("*")
+      .gt("price_cents", 0)
+      .order("id", { ascending: false });
+
+    if (!error && data) {
+      setRecords(data);
+    }
+    setLoading(false);
+  }
+
+  const handleInterestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!guestEmail || !viewItem) return;
+
+    setIsSubmitting(true);
+
+    const { error } = await supabase.from('buyer_leads').insert([{
+      record_id: viewItem.id,
+      vendor_id: viewItem.vendor_id,
+      guest_email: guestEmail,
+      status: 'new'
+    }]);
+
+    setIsSubmitting(false);
+
+    if (error) {
+      alert("Something went wrong sending your request. Please try again.");
     } else {
-      setGalleryImages([]); // Clear when modal closes
-    }
-  }, [inspectingRecord]);
-
-  // 1. The Radar Ping
-  const handleScanRadar = () => {
-    setScanning(true);
-    setErrorMsg('');
-    setStores([]);
-
-    if (!navigator.geolocation) {
-      setErrorMsg('Geolocation is not supported by your browser.');
-      setScanning(false);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        fetchNearbyStores(latitude, longitude);
-      },
-      (error) => {
-        setErrorMsg('Please allow location access to find nearby vinyl.');
-        setScanning(false);
-      }
-    );
-  };
-
-  // 2. Fetching from our new PostGIS brain
-  const fetchNearbyStores = async (lat: number, lon: number) => {
-    try {
-      const { data, error } = await supabase.rpc('get_nearby_stores', {
-        user_lat: lat,
-        user_lon: lon,
-        radius_miles: 25 // Scans a 25-mile radius
-      });
-
-      if (error) throw error;
-      
-      // 🚀 THE BULLETPROOF FILTER:
-      // 1. Strip out any records where price is 0 or less
-      // 2. Hide any stores that have 0 records left to sell
-      const filteredStores = (data || [])
-        .map((store: Store) => ({
-          ...store,
-          active_records: store.active_records.filter(record => record.price_cents > 0)
-        }))
-        .filter((store: Store) => store.active_records.length > 0);
-
-      setStores(filteredStores);
-    } catch (err: any) {
-      console.error('Radar failure:', err.message);
-      setErrorMsg('Supabase Error: ' + err.message); 
-    } finally {
-      setScanning(false);
+      setLeadSuccess(true);
+      setTimeout(() => {
+        setShowLeadModal(false);
+        setLeadSuccess(false);
+        setGuestEmail("");
+        setViewItem(null);
+      }, 3000);
     }
   };
+
+  const filteredRecords = records.filter(record => 
+    searchQuery === "" || 
+    record.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    record.artist.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <main className="min-h-screen bg-gray-50 font-sans p-6 md:p-12">
-      {/* HEADER */}
-      <header className="max-w-5xl mx-auto flex justify-between items-center mb-12">
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">TimbreBox<span className="text-emerald-600">.Radar</span></h1>
-        <a href="/vendor" className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition">Vendor Login →</a>
+    <main className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20">
+      
+      {/* --- PUBLIC HEADER --- */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 px-6 py-4 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm" />
+          <h1 className="text-xl font-black tracking-tight text-gray-900">TimbreBox</h1>
+        </div>
+        <div className="flex items-center gap-4">
+          <Link href="/login" className="text-sm font-bold text-gray-600 hover:text-emerald-600 transition hidden sm:block">
+            Member Login
+          </Link>
+          <Link href="/register" className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-5 py-2 rounded-xl hover:bg-emerald-100 transition shadow-sm">
+            Open Your Vault
+          </Link>
+        </div>
       </header>
 
-      {/* RADAR CONSOLE */}
-      <section className="max-w-5xl mx-auto bg-gray-900 rounded-3xl p-10 text-center shadow-2xl relative overflow-hidden mb-12">
-        <div className="relative z-10">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Find Vinyl Records Near You</h2>
-          <p className="text-gray-400 mb-8 max-w-xl mx-auto">Lock onto local independent sellers, view their exact distance, and browse their pristine crates before you drive.</p>
+      {/* --- HERO & INTRODUCTION --- */}
+      <section className="bg-gray-900 text-white pt-16 pb-20 px-6 text-center border-b-[6px] border-emerald-500">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-4xl sm:text-6xl font-black tracking-tight mb-6 leading-tight">
+            The local network for <br className="hidden sm:block"/>
+            <span className="text-emerald-400">true analog sound.</span>
+          </h2>
+          <p className="text-lg text-gray-400 font-medium leading-relaxed mb-10">
+            Welcome to TimbreBox. Explore the live public radar below to find verified records from local collectors. See something you need? Inspect the high-res photos and ping the vendor directly to secure your wax. 
+          </p>
           
-          <button 
-            onClick={handleScanRadar} 
-            disabled={scanning}
-            className="bg-emerald-500 hover:bg-emerald-400 text-gray-900 px-8 py-4 rounded-full font-bold text-lg transition shadow-[0_0_20px_rgba(16,185,129,0.4)] disabled:opacity-70 disabled:scale-95 flex items-center justify-center mx-auto gap-3"
-          >
-            {scanning ? (
-              <>
-                <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-emerald-200 opacity-75"></span>
-                Pinging Satellite...
-              </>
-            ) : (
-              'Scan Local Radar 🎯'
-            )}
-          </button>
-          
-          {errorMsg && <p className="text-red-400 mt-4 font-medium">{errorMsg}</p>}
+          <div className="relative w-full max-w-xl mx-auto">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl">🔍</span>
+            <input 
+              type="text" 
+              placeholder="Search artists, albums, or labels..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-4 rounded-2xl text-lg font-medium focus:outline-none focus:ring-4 focus:ring-emerald-500/50 bg-white text-gray-900 shadow-xl transition"
+            />
+          </div>
         </div>
       </section>
 
-      {/* STOREFRONT RESULTS */}
-      <section className="max-w-5xl mx-auto">
-        {!scanning && stores.length > 0 && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {stores.map((store) => (
-              <div key={store.store_id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-xl text-gray-900">{store.store_name}</h3>
-                    <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded-md">{store.distance_miles.toFixed(1)} mi</span>
+      {/* --- COLLECTIONS CORNER - VISUAL VERIFICATION --- */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
+        <div className="flex flex-col sm:flex-row items-baseline justify-between mb-8 border-b border-gray-200 pb-4">
+          <h3 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+            Collections Corner <span className="text-emerald-600 text-sm bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">Visual Verification</span>
+          </h3>
+          <p className="text-sm font-bold text-gray-500 mt-2 sm:mt-0">Showing {filteredRecords.length} live records</p>
+        </div>
+
+        {loading ? (
+          <div className="py-20 text-center text-gray-400 font-bold animate-pulse text-lg">Loading visual archives...</div>
+        ) : filteredRecords.length === 0 ? (
+          <div className="py-20 text-center">
+            <div className="text-5xl mb-4 opacity-20">📭</div>
+            <p className="text-gray-500 font-bold text-lg">No records match your search.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            {filteredRecords.map((record) => (
+              <div 
+                key={record.id} 
+                onClick={() => setViewItem(record)}
+                className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm hover:shadow-xl hover:border-emerald-400 transition-all duration-300 cursor-pointer group flex flex-col h-full"
+              >
+                <div className="aspect-square w-full mb-4 overflow-hidden rounded-2xl bg-gray-100 relative">
+                  {record.cover_image ? (
+                    <img src={record.cover_image} alt="cover" className="w-full h-full object-cover transform group-hover:scale-105 transition duration-500" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">💿</div>
+                  )}
+                  <div className="absolute top-2 left-2 bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider shadow-sm">
+                    Verified
                   </div>
-                  <p className="text-gray-500 text-sm mb-4 line-clamp-2">{store.store_bio || "Independent local vinyl seller."}</p>
+                  <div className="absolute top-2 right-2 bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider">
+                    {record.condition}
+                  </div>
                 </div>
                 
-                <div className="border-t border-gray-100 pt-4 flex justify-between items-center">
-                  <span className="text-sm font-semibold text-gray-500">{store.active_records.length} Records</span>
-                  <button 
-                    onClick={() => setSelectedStore(store)}
-                    className="text-emerald-600 font-bold text-sm hover:text-emerald-700 transition flex items-center gap-1"
-                  >
-                    Browse Collection →
-                  </button>
+                <div className="flex-1 flex flex-col">
+                  <h4 className="font-black text-gray-900 leading-tight mb-1 line-clamp-2">{record.title}</h4>
+                  <p className="text-sm text-gray-500 font-medium mb-3 truncate">{record.artist}</p>
+                  
+                  <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100">
+                    <span className="font-black text-lg text-emerald-600">${(record.price_cents / 100).toFixed(2)}</span>
+                    <button className="text-xs font-bold text-gray-400 group-hover:text-emerald-600 transition flex items-center gap-1">
+                      Inspect <span>→</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
-
-        {!scanning && stores.length === 0 && !errorMsg && (
-          <div className="text-center text-gray-400 py-12">
-            Radar is standing by. Click scan to locate nearby vinyl records.
-          </div>
-        )}
       </section>
 
-      {/* THE COLLECTION MODAL */}
-      {selectedStore && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-40 p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
-            {/* Modal Header */}
-            <div className="p-5 sm:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <div>
-                <h3 className="text-xl sm:text-2xl font-bold text-gray-900">{selectedStore.store_name}</h3>
-                <p className="text-xs sm:text-sm text-gray-500">{selectedStore.distance_miles.toFixed(1)} miles away</p>
-              </div>
-              <button 
-                onClick={() => setSelectedStore(null)}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
-              >
-                ✕
-              </button>
-            </div>
+      {/* --- INSPECT MODAL (VISUAL VERIFICATION) --- */}
+      {viewItem && !showLeadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
             
-            {/* Modal Inventory List */}
-            <div className="p-4 sm:p-6 overflow-y-auto bg-gray-50/50 flex-1">
-              {selectedStore.active_records.length === 0 ? (
-                <p className="text-center text-gray-400 italic">This collection is currently empty.</p>
-              ) : (
-                <div className="space-y-3">
-                  {selectedStore.active_records.map((record) => (
-                    <div key={record.id} className="border border-gray-100 rounded-2xl p-3 sm:p-4 flex gap-3 sm:gap-4 items-center hover:border-emerald-200 hover:shadow-md transition bg-white cursor-pointer group" onClick={() => setInspectingRecord(record)}>
-                      
-                      {/* Album Thumbnail */}
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 flex items-center justify-center shadow-sm group-hover:shadow transition">
-                        {record.cover_image ? (
-                          <img src={record.cover_image} alt={record.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-2xl opacity-30">💿</span>
-                        )}
-                      </div>
+            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <span className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Visual Verification 
+              </span>
+              <button onClick={() => setViewItem(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">✕</button>
+            </div>
 
-                      {/* Info Panel */}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-gray-900 text-sm sm:text-base truncate">{record.title}</h4>
-                        <p className="text-xs sm:text-sm text-gray-500 truncate mb-1.5">{record.artist}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{record.weight_grams}g</span>
-                          <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">Grade: {record.condition || 'New'}</span>
-                          <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">Qty: {record.quantity}</span>
-                        </div>
-                      </div>
-
-                      {/* Action Panel */}
-                      <div className="text-right flex-shrink-0 flex flex-col items-end justify-center">
-                        <div className="font-black text-base sm:text-lg text-emerald-600 mb-1.5">${(record.price_cents / 100).toFixed(2)}</div>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setInspectingRecord(record); }}
-                          className="bg-gray-900 group-hover:bg-emerald-600 text-white text-[10px] sm:text-xs font-bold px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition shadow-sm"
-                        >
-                          Inspect
-                        </button>
-                      </div>
-
+            <div className="p-6 overflow-y-auto">
+              <div className="flex flex-col sm:flex-row gap-8 mb-8">
+                <div className="w-full sm:w-2/5 aspect-square bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 border border-gray-200 shadow-inner">
+                  {viewItem.cover_image ? (
+                    <img src={viewItem.cover_image} alt="cover" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-6xl opacity-20">💿</div>
+                  )}
+                </div>
+                <div className="flex-1 flex flex-col justify-center">
+                  <h2 className="text-3xl font-black text-gray-900 tracking-tight leading-tight mb-2">{viewItem.title}</h2>
+                  <p className="text-xl text-gray-500 font-medium mb-6">{viewItem.artist}</p>
+                  
+                  <div className="grid grid-cols-3 gap-3 mb-6">
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Condition</p>
+                      <p className="text-sm font-black text-gray-800 mt-0.5">{viewItem.condition}</p>
                     </div>
-                  ))}
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Weight</p>
+                      <p className="text-sm font-black text-gray-800 mt-0.5">{viewItem.weight_grams}g</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Year</p>
+                      <p className="text-sm font-black text-gray-800 mt-0.5">{viewItem.year || 'N/A'}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 flex items-center justify-between mt-auto">
+                    <div>
+                      <p className="text-xs font-bold text-emerald-800 uppercase tracking-widest mb-0.5">Asking Price</p>
+                      <p className="text-4xl font-black text-emerald-600">${(viewItem.price_cents / 100).toFixed(2)}</p>
+                    </div>
+                    <button 
+                      onClick={() => setShowLeadModal(true)}
+                      className="bg-gray-900 hover:bg-gray-800 text-white font-black text-lg px-8 py-4 rounded-xl shadow-xl transition transform active:scale-95"
+                    >
+                      Interested
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {viewItem.tracklist && viewItem.tracklist.length > 0 && (
+                <div className="border-t border-gray-100 pt-6">
+                  <h4 className="font-black text-gray-900 mb-4 text-lg">Tracklist Verification</h4>
+                  <div className="bg-gray-50 rounded-2xl border border-gray-200 p-2 grid sm:grid-cols-2 gap-x-6 gap-y-1">
+                    {viewItem.tracklist.map((track: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center p-2 border-b border-gray-200/50 last:border-b-0 hover:bg-white transition rounded-lg">
+                        <div className="flex gap-3 min-w-0">
+                          <span className="text-[10px] font-bold text-gray-400 w-4 mt-0.5">{track.position || i+1}</span>
+                          <span className="text-sm font-bold text-gray-800 truncate">{track.title}</span>
+                        </div>
+                        <span className="text-xs font-medium text-gray-500 pl-2">{track.duration}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -241,110 +260,67 @@ export default function PublicRadar() {
         </div>
       )}
 
-      {/* --- THE RECORD INSPECTOR MODAL --- */}
-      {inspectingRecord && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-8">
-          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row shadow-2xl overflow-hidden animate-fade-in relative">
+      {/* --- LEAD CAPTURE MODAL --- */}
+      {showLeadModal && viewItem && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/90 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative animate-fade-in">
             
-            {/* Close Button */}
             <button 
-              onClick={() => setInspectingRecord(null)}
-              className="absolute top-4 right-4 z-10 bg-white/90 hover:bg-white text-gray-900 rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-lg transition"
+              onClick={() => { setShowLeadModal(false); setLeadSuccess(false); }} 
+              className="absolute top-4 right-4 z-10 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
             >
               ✕
             </button>
 
-            {/* Left Column: Album Art */}
-            <div className="md:w-5/12 bg-gray-100 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-gray-200 min-h-[250px] relative">
-              {inspectingRecord.cover_image ? (
-                <img src={inspectingRecord.cover_image} alt="Album Cover" className="w-full h-auto object-cover rounded-xl shadow-lg" />
-              ) : (
-                <div className="text-center">
-                  <div className="text-8xl mb-4 opacity-30">💿</div>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No Cover Scan</p>
+            {leadSuccess ? (
+              <div className="p-10 text-center flex flex-col items-center justify-center h-full">
+                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-4xl mb-6 shadow-inner">
+                  ✓
                 </div>
-              )}
-            </div>
-
-            {/* Right Column: Specs & Collector's Corner */}
-            <div className="md:w-7/12 p-6 md:p-8 overflow-y-auto bg-white flex flex-col">
-              
-              {/* Header Info */}
-              <div className="mb-6">
-                <h3 className="text-3xl font-black text-gray-900 leading-tight tracking-tight mb-1">{inspectingRecord.title}</h3>
-                <p className="text-lg font-medium text-gray-500">{inspectingRecord.artist}</p>
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Request Sent!</h3>
+                <p className="text-gray-500 font-medium">
+                  The vendor has been notified and will reach out to you directly to coordinate.
+                </p>
               </div>
+            ) : (
+              <div className="p-8">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 border border-blue-100">
+                    📨
+                  </div>
+                  <h3 className="text-xl font-black text-gray-900 tracking-tight">Connect with Vendor</h3>
+                  <p className="text-sm text-gray-500 font-medium mt-2">
+                    Drop your email below. We'll instantly notify the seller you are interested in <strong>{viewItem.title}</strong>.
+                  </p>
+                </div>
 
-              {/* Core Specs Grid */}
-              <div className="grid grid-cols-2 gap-3 mb-8">
-                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-                  <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-1">Asking Price</p>
-                  <p className="text-2xl font-black text-emerald-600">${(inspectingRecord.price_cents / 100).toFixed(2)}</p>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Media Grade</p>
-                  <p className="text-2xl font-black text-gray-900">{inspectingRecord.condition || 'Unknown'}</p>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Vinyl Weight</p>
-                  <p className="text-lg font-bold text-gray-900">{inspectingRecord.weight_grams}g</p>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Availability</p>
-                  <p className="text-lg font-bold text-gray-900">{inspectingRecord.quantity} in stock</p>
-                </div>
-              </div>
-
-              {/* The Collector's Corner */}
-              <div className="mt-auto border-t border-gray-200 pt-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="bg-gray-900 text-white text-[10px] uppercase tracking-widest font-black px-2 py-1 rounded">Collector's Corner</span>
-                  <span className="text-xs font-semibold text-gray-400">Visual Verification</span>
-                </div>
-                
-                <div className="bg-gray-900 rounded-xl p-5 text-left border border-gray-800 shadow-inner">
+                <form onSubmit={handleInterestSubmit} className="flex flex-col gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1 block">Your Email Address <span className="text-red-500">*</span></label>
+                    <input 
+                      type="email" 
+                      required 
+                      autoFocus
+                      placeholder="collector@example.com"
+                      value={guestEmail} 
+                      onChange={(e) => setGuestEmail(e.target.value)} 
+                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 text-base focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 bg-gray-50 transition font-medium" 
+                    />
+                  </div>
                   
-                  {/* DYNAMIC SWIPEABLE GALLERY */}
-                  {galleryImages.length === 0 ? (
-                    <div className="w-full h-24 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-500 bg-gray-800/50">
-                      <span className="text-xl mb-1">🔍</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest">Awaiting Verification Photos</span>
-                    </div>
-                  ) : (
-                    <div 
-                      className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory" 
-                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                    >
-                      {galleryImages.map((img, i) => (
-                        <div key={img.id} className="flex-shrink-0 w-32 h-32 sm:w-40 sm:h-40 snap-center rounded-lg overflow-hidden border border-gray-700 bg-gray-800 relative group">
-                          <img src={img.image_url} alt={`Gallery view ${i+1}`} className="w-full h-full object-cover" />
-                          
-                          {/* THE NEW PHOTO TAG BADGE */}
-                          <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent pt-2 pb-4 px-2 pointer-events-none">
-                            <span className="text-emerald-400 text-[9px] font-black uppercase tracking-widest drop-shadow-md">
-                              {img.caption || 'Gallery Photo'}
-                            </span>
-                          </div>
-                          
-                          {/* Hover Overlay for High-Res Viewing */}
-                          <a 
-                            href={img.image_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition cursor-pointer"
-                          >
-                            <span className="text-white text-xs font-bold uppercase tracking-wider bg-gray-900/80 px-3 py-1.5 rounded-full border border-gray-600">
-                              🔍 Full Size
-                            </span>
-                          </a>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting} 
+                    className="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-4 text-base font-black transition shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isSubmitting ? 'Sending Ping...' : 'Send Request to Vendor'}
+                  </button>
+                  <p className="text-[10px] text-center text-gray-400 font-medium mt-2 px-4">
+                    TimbreBox keeps your email private until the vendor reaches out to complete the handoff.
+                  </p>
+                </form>
               </div>
-
-            </div>
+            )}
           </div>
         </div>
       )}
