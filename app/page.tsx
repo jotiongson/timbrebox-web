@@ -34,11 +34,15 @@ export default function MasterLandingPage() {
   const [vendors, setVendors] = useState<LocalVendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dbError, setDbError] = useState(""); // 🚨 New safety net for database connection issues
+  const [dbError, setDbError] = useState("");
+
+  // Navigation State
+  const [selectedVendor, setSelectedVendor] = useState<LocalVendor | null>(null);
 
   // Modal States
   const [viewItem, setViewItem] = useState<PublicRecord | null>(null);
   const [galleryImages, setGalleryImages] = useState<any[]>([]);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const [showLeadModal, setShowLeadModal] = useState(false);
   
   // Lead Form States
@@ -72,7 +76,6 @@ export default function MasterLandingPage() {
     setLoading(true);
     setDbError("");
     
-    // Fetch records > $0.00 and join the vendor's store name
     const { data, error } = await supabase
       .from("inventory")
       .select("*, vendor_profiles(store_name)")
@@ -85,12 +88,10 @@ export default function MasterLandingPage() {
     } else if (data) {
       setRecords(data);
 
-      // Group records by vendor to build the "Active Local Vaults" list
       const vendorMap = new Map<string, LocalVendor>();
       
       data.forEach((record: any) => {
         if (!vendorMap.has(record.vendor_id)) {
-          // Generate a pseudo-random distance strictly for UI demonstration around the Eastvale area
           const mockDistance = Math.floor(Math.random() * 12) + 1; 
           
           vendorMap.set(record.vendor_id, {
@@ -138,18 +139,23 @@ export default function MasterLandingPage() {
     }
   };
 
-  const filteredRecords = records.filter(record => 
-    searchQuery === "" || 
-    record.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    record.artist.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter records based on selected vendor AND search query
+  const vendorRecords = selectedVendor 
+    ? records.filter(r => r.vendor_id === selectedVendor.id && 
+        (searchQuery === "" || 
+         r.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         r.artist.toLowerCase().includes(searchQuery.toLowerCase())))
+    : [];
 
   return (
     <main className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20">
       
       {/* --- PUBLIC HEADER --- */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30 px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
+        <div 
+          className="flex items-center gap-3 cursor-pointer" 
+          onClick={() => { setSelectedVendor(null); setSearchQuery(""); }}
+        >
           <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm" />
           <h1 className="text-xl font-black tracking-tight text-gray-900">TimbreBox</h1>
         </div>
@@ -163,69 +169,28 @@ export default function MasterLandingPage() {
         </div>
       </header>
 
-      {/* --- HERO & INTRODUCTION --- */}
-      <section className="bg-gray-900 text-white pt-16 pb-20 px-6 text-center border-b-[6px] border-emerald-500">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-4xl sm:text-6xl font-black tracking-tight mb-6 leading-tight">
-            The local network for <br className="hidden sm:block"/>
-            <span className="text-emerald-400">true analog sound.</span>
-          </h2>
-          <p className="text-lg text-gray-400 font-medium leading-relaxed mb-10">
-            Welcome to TimbreBox. Explore the live public radar below to find verified records from local collectors. See something you need? Inspect the high-res photos and ping the vendor directly to secure your wax. 
-          </p>
-          
-          <div className="relative w-full max-w-xl mx-auto">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl">🔍</span>
-            <input 
-              type="text" 
-              placeholder="Search artists, albums, or labels..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 rounded-2xl text-lg font-medium focus:outline-none focus:ring-4 focus:ring-emerald-500/50 bg-white text-gray-900 shadow-xl transition"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* --- ACTIVE LOCAL VENDORS --- */}
-      {!loading && !dbError && vendors.length > 0 && (
-        <section className="bg-white border-b border-gray-200 py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-8">
-            <h3 className="text-lg font-black text-gray-900 mb-4 flex items-center gap-2">
-              <span>📡</span> Active Local Vaults
-            </h3>
-            <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
-              {vendors.map(v => (
-                <div key={v.id} className="bg-gray-50 border border-gray-200 p-4 rounded-2xl min-w-[240px] shadow-sm flex flex-col flex-shrink-0">
-                  <div className="flex justify-between items-start mb-3">
-                    <h4 className="font-bold text-gray-900 truncate pr-2">{v.name}</h4>
-                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg uppercase tracking-wider">
-                      {v.recordCount} Records
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 font-bold flex items-center gap-1 mt-auto">
-                    📍 ~{v.distance} miles from Eastvale
-                  </p>
-                </div>
-              ))}
-            </div>
+      {/* --- HERO SECTION --- */}
+      {!selectedVendor && (
+        <section className="bg-gray-900 text-white pt-16 pb-16 px-6 text-center border-b-[6px] border-emerald-500">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-4xl sm:text-6xl font-black tracking-tight mb-6 leading-tight">
+              The local network for <br className="hidden sm:block"/>
+              <span className="text-emerald-400">true analog sound.</span>
+            </h2>
+            <p className="text-lg text-gray-400 font-medium leading-relaxed mb-0">
+              Welcome to TimbreBox. Explore active local vaults below to find verified records from collectors near you. Inspect the high-res photos to verify the wax, then ping the vendor directly to secure it. 
+            </p>
           </div>
         </section>
       )}
 
-      {/* --- COLLECTIONS CORNER - VISUAL VERIFICATION --- */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
-        <div className="flex flex-col sm:flex-row items-baseline justify-between mb-8 border-b border-gray-200 pb-4">
-          <h3 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            Collections Corner <span className="text-emerald-600 text-sm bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">Visual Verification</span>
-          </h3>
-          <p className="text-sm font-bold text-gray-500 mt-2 sm:mt-0">Showing {filteredRecords.length} live records</p>
-        </div>
-
+      {/* --- MAIN CONTENT AREA --- */}
+      <section className="max-w-4xl mx-auto px-4 sm:px-8 py-8">
+        
         {/* 🚨 DATABASE ERROR SAFETY NET */}
         {dbError && (
-          <div className="py-10 text-center">
-            <div className="bg-red-50 text-red-600 border border-red-200 p-6 rounded-2xl inline-block shadow-sm max-w-lg">
+          <div className="mb-10 text-center">
+            <div className="bg-red-50 text-red-600 border border-red-200 p-6 rounded-2xl inline-block shadow-sm max-w-lg w-full">
               <h4 className="font-black text-lg mb-1">Database Connection Blocked</h4>
               <p className="font-medium text-sm">{dbError}</p>
             </div>
@@ -233,55 +198,117 @@ export default function MasterLandingPage() {
         )}
 
         {loading ? (
-          <div className="py-20 text-center text-gray-400 font-bold animate-pulse text-lg">Loading visual archives...</div>
-        ) : !dbError && filteredRecords.length === 0 ? (
-          <div className="py-20 text-center">
-            <div className="text-5xl mb-4 opacity-20">📭</div>
-            <p className="text-gray-500 font-bold text-lg">No records match your search.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {filteredRecords.map((record) => (
-              <div 
-                key={record.id} 
-                onClick={() => setViewItem(record)}
-                className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm hover:shadow-xl hover:border-emerald-400 transition-all duration-300 cursor-pointer group flex flex-col h-full"
-              >
-                <div className="aspect-square w-full mb-4 overflow-hidden rounded-2xl bg-gray-100 relative">
-                  {record.cover_image ? (
-                    <img src={record.cover_image} alt="cover" className="w-full h-full object-cover transform group-hover:scale-105 transition duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">💿</div>
-                  )}
-                  <div className="absolute top-2 left-2 bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider shadow-sm">
-                    Verified
-                  </div>
-                  <div className="absolute top-2 right-2 bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider">
-                    {record.condition}
-                  </div>
-                </div>
-                
-                <div className="flex-1 flex flex-col">
-                  <h4 className="font-black text-gray-900 leading-tight mb-1 line-clamp-2">{record.title}</h4>
-                  <p className="text-sm text-gray-500 font-medium mb-1 truncate">{record.artist}</p>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 truncate">
-                    By: {record.vendor_profiles?.store_name || "Collector"}
-                  </p>
-                  
-                  <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100">
-                    <span className="font-black text-lg text-emerald-600">${(record.price_cents / 100).toFixed(2)}</span>
-                    <button className="text-xs font-bold text-gray-400 group-hover:text-emerald-600 transition flex items-center gap-1">
-                      Inspect <span>→</span>
-                    </button>
-                  </div>
-                </div>
+          <div className="py-20 text-center text-gray-400 font-bold animate-pulse text-lg">Scanning the local network...</div>
+        ) : !selectedVendor ? (
+          
+          /* --- VIEW 1: TIGHT VENDOR LIST --- */
+          <div className="animate-fade-in">
+            <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2 px-2">
+              <span>📡</span> Active Local Vaults
+            </h3>
+            
+            {vendors.length === 0 && !dbError ? (
+              <div className="bg-white border border-gray-200 rounded-3xl p-10 text-center shadow-sm">
+                <div className="text-5xl mb-4 opacity-20">📭</div>
+                <p className="text-gray-500 font-bold text-lg">No local vaults are broadcasting right now.</p>
               </div>
-            ))}
+            ) : (
+              <div className="flex flex-col gap-3">
+                {vendors.map(v => (
+                  <button 
+                    key={v.id}
+                    onClick={() => setSelectedVendor(v)}
+                    className="flex items-center justify-between bg-white border border-gray-200 p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-400 transition-all text-left w-full group"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-black text-lg text-gray-900 leading-tight group-hover:text-emerald-700 transition-colors">{v.name}</span>
+                      <span className="text-xs font-bold text-gray-500 mt-1">📍 ~{v.distance} miles from Eastvale</span>
+                    </div>
+                    <div className="bg-gray-50 text-emerald-700 px-4 py-2 rounded-xl text-sm font-black border border-gray-200 group-hover:bg-emerald-50 group-hover:border-emerald-200 transition-colors flex items-center gap-2">
+                      {v.recordCount} Records <span className="text-emerald-500 text-lg leading-none">→</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+        ) : (
+
+          /* --- VIEW 2: VENDOR'S SPECIFIC INVENTORY GRID --- */
+          <div className="animate-fade-in">
+            <button 
+              onClick={() => { setSelectedVendor(null); setSearchQuery(""); }}
+              className="text-sm font-bold text-gray-500 hover:text-emerald-600 mb-6 flex items-center gap-2 transition"
+            >
+              ← Back to Local Vaults
+            </button>
+
+            <div className="bg-gray-900 rounded-3xl p-6 sm:p-8 mb-8 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6 border-b-4 border-emerald-500">
+              <div>
+                <h2 className="text-3xl font-black tracking-tight mb-1">{selectedVendor.name}</h2>
+                <p className="text-emerald-400 font-bold text-sm tracking-widest uppercase">Visual Verification Vault</p>
+              </div>
+              
+              <div className="relative w-full sm:w-72">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                <input 
+                  type="text" 
+                  placeholder="Search this vault..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-800 border border-gray-700 text-white placeholder-gray-500 transition"
+                />
+              </div>
+            </div>
+
+            {vendorRecords.length === 0 ? (
+              <div className="py-20 text-center">
+                <div className="text-5xl mb-4 opacity-20">💿</div>
+                <p className="text-gray-500 font-bold text-lg">No records match your search in this vault.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+                {vendorRecords.map((record) => (
+                  <div 
+                    key={record.id} 
+                    onClick={() => setViewItem(record)}
+                    className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm hover:shadow-xl hover:border-emerald-400 transition-all duration-300 cursor-pointer group flex flex-col h-full"
+                  >
+                    <div className="aspect-square w-full mb-4 overflow-hidden rounded-2xl bg-gray-100 relative">
+                      {record.cover_image ? (
+                        <img src={record.cover_image} alt="cover" className="w-full h-full object-cover transform group-hover:scale-105 transition duration-500" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">💿</div>
+                      )}
+                      <div className="absolute top-2 left-2 bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider shadow-sm">
+                        Verified
+                      </div>
+                      <div className="absolute top-2 right-2 bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider">
+                        {record.condition}
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col">
+                      <h4 className="font-black text-gray-900 leading-tight mb-1 line-clamp-2">{record.title}</h4>
+                      <p className="text-sm text-gray-500 font-medium mb-3 truncate">{record.artist}</p>
+                      
+                      <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100">
+                        <span className="font-black text-lg text-emerald-600">${(record.price_cents / 100).toFixed(2)}</span>
+                        <button className="text-xs font-bold text-gray-400 group-hover:text-emerald-600 transition flex items-center gap-1">
+                          Inspect <span>→</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </section>
 
-      {/* --- INSPECT MODAL --- */}
+      {/* --- INSPECT MODAL (VISUAL VERIFICATION) --- */}
       {viewItem && !showLeadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
@@ -336,23 +363,30 @@ export default function MasterLandingPage() {
                 </div>
               </div>
 
-              {/* --- THE DARK THEME HI-RES GALLERY --- */}
+              {/* --- THE DARK THEME HI-RES GALLERY (WITH FULLSCREEN TRIGGER) --- */}
               {galleryImages.length > 0 && (
                 <div className="border-t border-gray-100 pt-6 mb-6">
                   <div className="bg-gray-900 rounded-2xl p-5 shadow-inner border border-gray-800 relative overflow-hidden">
-                    {/* Decorative accent */}
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-bl-full pointer-events-none"></div>
                     
-                    <h4 className="text-emerald-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <span className="text-lg">🔍</span> Visual Inspection Gallery
-                    </h4>
+                    <div className="flex items-center justify-between mb-4 relative z-10">
+                      <h4 className="text-emerald-400 text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                        <span className="text-lg">🔍</span> Visual Inspection Gallery
+                      </h4>
+                      <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Tap photo to enlarge</span>
+                    </div>
+
                     <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar relative z-10">
                       {galleryImages.map(img => (
-                        <div key={img.id} className="relative w-40 h-40 flex-shrink-0 rounded-xl overflow-hidden border-2 border-gray-700 hover:border-emerald-500 transition-colors cursor-crosshair group shadow-lg">
+                        <div 
+                          key={img.id} 
+                          onClick={() => setFullScreenImage(img.image_url)}
+                          className="relative w-40 h-40 flex-shrink-0 rounded-xl overflow-hidden border-2 border-gray-700 hover:border-emerald-500 transition-colors cursor-zoom-in group shadow-lg"
+                        >
                           <img 
                             src={img.image_url} 
                             alt={img.caption} 
-                            className="w-full h-full object-cover group-hover:scale-125 transition-transform duration-700" 
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
                           />
                           <div className="absolute bottom-0 left-0 right-0 bg-black/80 px-2 py-1.5 backdrop-blur-sm border-t border-gray-700">
                             <p className="text-[10px] text-white font-bold uppercase tracking-wider truncate text-center">
@@ -384,6 +418,23 @@ export default function MasterLandingPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- FULLSCREEN IMAGE OVERLAY --- */}
+      {fullScreenImage && (
+        <div 
+          className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-8 cursor-zoom-out animate-fade-in"
+          onClick={() => setFullScreenImage(null)}
+        >
+          <img 
+            src={fullScreenImage} 
+            alt="Full resolution inspection" 
+            className="w-full h-full object-contain drop-shadow-2xl" 
+          />
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-gray-900/80 text-white text-xs font-bold px-4 py-2 rounded-full border border-gray-700 backdrop-blur-sm">
+            Tap anywhere to close
           </div>
         </div>
       )}
