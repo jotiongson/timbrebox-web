@@ -785,12 +785,14 @@ export default function VendorDashboard() {
             👤
           </button>
           
-          {/* PROFILE DROPDOWN: Fixed to remove Admin Panel link */}
           {isProfileMenuOpen && (
             <>
               <div className="fixed inset-0" onClick={() => setIsProfileMenuOpen(false)}></div>
               <div className="absolute right-0 mt-12 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
                 <a href="/vendor/settings" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">⚙️ Settings</a>
+                {isAdmin && (
+                  <a href="/admin" className="px-5 py-3.5 text-sm font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border-b border-gray-50 transition flex items-center gap-2">🛡️ Admin Panel</a>
+                )}
                 <a href="/" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">📡 View Radar</a>
                 <button onClick={() => supabase.auth.signOut()} className="px-5 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 text-left transition flex items-center gap-2">🚪 Sign Out</button>
               </div>
@@ -875,48 +877,6 @@ export default function VendorDashboard() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* --- TELEMETRY CACHE EFFICIENCY STRIP (ADMIN ONLY) --- Fixed mt-6 to push down on mobile */}
-      {isAdmin && (
-        <section className="mt-6 mb-6 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm animate-fade-in">
-          <div 
-            className="flex justify-between items-center cursor-pointer select-none" 
-            onClick={() => { if(!showMetrics) refreshTelemetry(); setShowMetrics(!showMetrics); }}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-sm">🛡️</span>
-              <span className="text-xs font-black text-gray-700 uppercase tracking-wider">Discogs API Rate Limit Shield</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${metrics.efficiency_pct > 75 ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-50 text-blue-700'}`}>
-                {metrics.efficiency_pct}% Deflection
-              </span>
-            </div>
-            <button type="button" className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition">
-              {showMetrics ? "Hide Telemetry ✕" : "View Live Diagnostics 📊"}
-            </button>
-          </div>
-
-          {showMetrics && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-100 animate-fade-in text-center">
-              <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Total Operations</p>
-                <p className="text-lg font-black text-gray-800 mt-1">{metrics.total_requests}</p>
-              </div>
-              <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
-                <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide">Deflected via Cache</p>
-                <p className="text-lg font-black text-emerald-600 mt-1">{metrics.cache_hits} <span className="text-[10px] text-emerald-400 font-normal">({metrics.avg_cache_ms}ms)</span></p>
-              </div>
-              <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-100">
-                <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">Actual API Costs</p>
-                <p className="text-lg font-black text-amber-600 mt-1">{metrics.api_misses} <span className="text-[10px] text-amber-400 font-normal">({metrics.avg_api_ms}ms)</span></p>
-              </div>
-              <div className="bg-gray-900 p-3 rounded-xl text-white">
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">API Cost Reduction</p>
-                <p className="text-lg font-black text-emerald-400 mt-1">{metrics.efficiency_pct}%</p>
-              </div>
-            </div>
-          )}
-        </section>
       )}
 
       {/* --- MASTER SCAN/ADD BUTTON --- */}
