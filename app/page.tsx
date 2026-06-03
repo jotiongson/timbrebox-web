@@ -231,8 +231,11 @@ export default function MasterLandingPage() {
         >
           <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm flex-shrink-0" />
           <div>
-            <h1 className="text-xl font-black tracking-tight text-gray-900 flex items-center gap-2">
-              TimbreBox <span className="text-emerald-600 font-bold text-xs sm:text-sm bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 mt-0.5 sm:mt-0">Radar</span>
+            {/* 🎨 RESTYLED: Elegant minimalist state indicator */}
+            <h1 className="text-xl font-black tracking-tight text-gray-900 flex items-center">
+              TimbreBox 
+              <span className="text-gray-300 font-light mx-2 text-lg">/</span> 
+              <span className="text-emerald-600 font-bold text-sm tracking-wide uppercase mt-0.5">Radar</span>
             </h1>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
               {session ? `Viewing as: ${collectorName || 'Collector'}` : 'Viewing as: Guest'}
@@ -487,18 +490,18 @@ export default function MasterLandingPage() {
                 </div>
               )}
 
-              {/* --- TRACKLIST --- */}
+              {/* --- 🛠️ FIX: BULLETPROOF STABLE TRACKLIST LAYOUT --- */}
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div className="border-t border-gray-100 pt-6">
                   <h4 className="font-black text-gray-900 mb-4 text-lg">Tracklist Verification</h4>
-                  <div className="bg-gray-50 rounded-2xl border border-gray-200 p-2 grid sm:grid-cols-2 gap-x-6 gap-y-1">
+                  <div className="bg-gray-50 rounded-2xl border border-gray-200 p-2 flex flex-col w-full divide-y divide-gray-200/40">
                     {viewItem.tracklist.map((track: any, i: number) => (
-                      <div key={i} className="flex justify-between items-center p-2 border-b border-gray-200/50 last:border-b-0 hover:bg-white transition rounded-lg">
-                        <div className="flex gap-3 min-w-0">
-                          <span className="text-[10px] font-bold text-gray-400 w-4 mt-0.5">{track.position || i+1}</span>
-                          <span className="text-sm font-bold text-gray-800 truncate">{track.title}</span>
+                      <div key={i} className="flex items-center justify-between p-3 hover:bg-white transition rounded-xl w-full">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <span className="text-xs font-mono font-bold text-gray-400 w-6 flex-shrink-0">{track.position || i+1}</span>
+                          <span className="text-sm font-bold text-gray-800 truncate pr-4">{track.title}</span>
                         </div>
-                        <span className="text-xs font-medium text-gray-500 pl-2">{track.duration}</span>
+                        <span className="text-xs font-mono font-medium text-gray-400 flex-shrink-0">{track.duration || "--:--"}</span>
                       </div>
                     ))}
                   </div>
