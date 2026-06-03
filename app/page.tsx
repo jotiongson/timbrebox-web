@@ -36,6 +36,10 @@ export default function MasterLandingPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dbError, setDbError] = useState("");
 
+  // Auth & Identity States
+  const [session, setSession] = useState<any>(null);
+  const [collectorName, setCollectorName] = useState<string | null>(null);
+
   // Navigation State
   const [selectedVendor, setSelectedVendor] = useState<LocalVendor | null>(null);
 
@@ -52,7 +56,6 @@ export default function MasterLandingPage() {
 
   // --- NATIVE MOBILE BACK BUTTON LISTENER ---
   useEffect(() => {
-    // Clear any lingering hash on initial load to ensure a clean slate
     if (window.location.hash) {
       window.history.replaceState(null, '', window.location.pathname);
     }
@@ -60,7 +63,6 @@ export default function MasterLandingPage() {
     const handleHashChange = () => {
       const h = window.location.hash;
       
-      // Step backwards through the UI based on the URL hash
       if (h === '#lead') {
         setFullScreenImage(null);
       } else if (h === '#inspect') {
@@ -84,11 +86,43 @@ export default function MasterLandingPage() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  // --- CHECK AUTHENTICATION IDENTITY ---
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchCollectorProfile(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        fetchCollectorProfile(session.user.id);
+      } else {
+        setCollectorName(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function fetchCollectorProfile(userId: string) {
+    const { data } = await supabase
+      .from("vendor_profiles")
+      .select("store_name")
+      .eq("id", userId)
+      .single();
+    if (data && data.store_name) {
+      setCollectorName(data.store_name);
+    }
+  }
+
+  // --- FETCH RADAR DATA ---
   useEffect(() => {
     fetchPublicRadar();
   }, []);
 
-  // Fetch High-Res Gallery Images when a record is inspected
   useEffect(() => {
     if (viewItem) {
       async function fetchGallery() {
@@ -169,13 +203,11 @@ export default function MasterLandingPage() {
         setLeadSuccess(false);
         setGuestEmail("");
         setViewItem(null);
-        // Force the URL back to the vault view after a successful submission
         window.history.replaceState(null, '', window.location.pathname + '#vault');
       }, 3000);
     }
   };
 
-  // Filter records based on selected collector AND search query
   const vendorRecords = selectedVendor 
     ? records.filter(r => r.vendor_id === selectedVendor.id && 
         (searchQuery === "" || 
@@ -197,16 +229,31 @@ export default function MasterLandingPage() {
             window.history.replaceState(null, '', window.location.pathname);
           }}
         >
-          <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm" />
-          <h1 className="text-xl font-black tracking-tight text-gray-900">TimbreBox</h1>
+          <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm flex-shrink-0" />
+          <div>
+            <h1 className="text-xl font-black tracking-tight text-gray-900 flex items-center gap-2">
+              TimbreBox <span className="text-emerald-600 font-bold text-xs sm:text-sm bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 mt-0.5 sm:mt-0">Radar</span>
+            </h1>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
+              {session ? `Viewing as: ${collectorName || 'Collector'}` : 'Viewing as: Guest'}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
-          <Link href="/login" className="text-sm font-bold text-gray-600 hover:text-emerald-600 transition hidden sm:block">
-            Member Login
-          </Link>
-          <Link href="/login" className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-5 py-2 rounded-xl hover:bg-emerald-100 transition shadow-sm">
-            Open Your Vault
-          </Link>
+          {session ? (
+            <Link href="/vendor" className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-5 py-2 rounded-xl hover:bg-emerald-100 transition shadow-sm whitespace-nowrap">
+              Return to Vault
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="text-sm font-bold text-gray-600 hover:text-emerald-600 transition hidden sm:block whitespace-nowrap">
+                Member Login
+              </Link>
+              <Link href="/login" className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-5 py-2 rounded-xl hover:bg-emerald-100 transition shadow-sm whitespace-nowrap">
+                Open Your Vault
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -403,7 +450,7 @@ export default function MasterLandingPage() {
                 </div>
               </div>
 
-              {/* --- THE DARK THEME HI-RES GALLERY (WITH FULLSCREEN TRIGGER) --- */}
+              {/* --- THE DARK THEME HI-RES GALLERY --- */}
               {galleryImages.length > 0 && (
                 <div className="border-t border-gray-100 pt-6 mb-6">
                   <div className="bg-gray-900 rounded-2xl p-5 shadow-inner border border-gray-800 relative overflow-hidden">
