@@ -139,7 +139,7 @@ export default function MasterLandingPage() {
     }
   };
 
-  // Filter records based on selected vendor AND search query
+  // Filter records based on selected collector AND search query
   const vendorRecords = selectedVendor 
     ? records.filter(r => r.vendor_id === selectedVendor.id && 
         (searchQuery === "" || 
@@ -178,7 +178,7 @@ export default function MasterLandingPage() {
               <span className="text-emerald-400">true analog sound.</span>
             </h2>
             <p className="text-lg text-gray-400 font-medium leading-relaxed mb-0">
-              Welcome to TimbreBox Vinyl Records. Browse the live public <strong>Radar</strong> below to discover albums actively broadcasting from local collectors' private <strong>Vaults</strong>. See a record you need? Inspect the high-res photos to visually verify the condition, then ping the vendor directly to secure your copy.
+              Welcome to TimbreBox Vinyl Records. Browse the live public <strong>Radar</strong> below to discover albums actively broadcasting from local collectors' private <strong>Vaults</strong>. See a record you need? Inspect the high-res photos to visually verify the condition, then ping the collector directly to secure your copy.
             </p>
           </div>
         </section>
@@ -201,7 +201,7 @@ export default function MasterLandingPage() {
           <div className="py-20 text-center text-gray-400 font-bold animate-pulse text-lg">Scanning the local network...</div>
         ) : !selectedVendor ? (
           
-          /* --- VIEW 1: TIGHT VENDOR LIST --- */
+          /* --- VIEW 1: TIGHT COLLECTOR VAULT LIST --- */
           <div className="animate-fade-in">
             <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2 px-2">
               <span>📡</span> Active Local Vaults
@@ -235,7 +235,7 @@ export default function MasterLandingPage() {
 
         ) : (
 
-          /* --- VIEW 2: VENDOR'S SPECIFIC INVENTORY GRID --- */
+          /* --- VIEW 2: COLLECTOR'S SPECIFIC INVENTORY GRID --- */
           <div className="animate-fade-in">
             <button 
               onClick={() => { setSelectedVendor(null); setSearchQuery(""); }}
@@ -458,7 +458,7 @@ export default function MasterLandingPage() {
                 </div>
                 <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Request Sent!</h3>
                 <p className="text-gray-500 font-medium">
-                  The vendor has been notified and will reach out to you directly to coordinate.
+                  The collector has been notified and will reach out to you directly to coordinate.
                 </p>
               </div>
             ) : (
@@ -467,9 +467,9 @@ export default function MasterLandingPage() {
                   <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 border border-blue-100">
                     📨
                   </div>
-                  <h3 className="text-xl font-black text-gray-900 tracking-tight">Connect with Vendor</h3>
+                  <h3 className="text-xl font-black text-gray-900 tracking-tight">Connect with Collector</h3>
                   <p className="text-sm text-gray-500 font-medium mt-2">
-                    Drop your email below. We'll instantly notify the seller you are interested in <strong>{viewItem.title}</strong>.
+                    Drop your email below. We'll instantly notify the collector you are interested in <strong>{viewItem.title}</strong>.
                   </p>
                 </div>
 
@@ -480,7 +480,7 @@ export default function MasterLandingPage() {
                       type="email" 
                       required 
                       autoFocus
-                      placeholder="collector@example.com"
+                      placeholder="buyer@example.com"
                       value={guestEmail} 
                       onChange={(e) => setGuestEmail(e.target.value)} 
                       className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 text-base focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 bg-gray-50 transition font-medium" 
@@ -492,10 +492,10 @@ export default function MasterLandingPage() {
                     disabled={isSubmitting} 
                     className="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-4 text-base font-black transition shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {isSubmitting ? 'Sending Ping...' : 'Send Request to Vendor'}
+                    {isSubmitting ? 'Sending Ping...' : 'Send Request to Collector'}
                   </button>
                   <p className="text-[10px] text-center text-gray-400 font-medium mt-2 px-4">
-                    TimbreBox keeps your email private until the vendor reaches out to complete the handoff.
+                    TimbreBox keeps your email private until the collector reaches out to complete the handoff.
                   </p>
                 </form>
               </div>
