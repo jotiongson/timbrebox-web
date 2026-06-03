@@ -50,6 +50,40 @@ export default function MasterLandingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leadSuccess, setLeadSuccess] = useState(false);
 
+  // --- NATIVE MOBILE BACK BUTTON LISTENER ---
+  useEffect(() => {
+    // Clear any lingering hash on initial load to ensure a clean slate
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
+    const handleHashChange = () => {
+      const h = window.location.hash;
+      
+      // Step backwards through the UI based on the URL hash
+      if (h === '#lead') {
+        setFullScreenImage(null);
+      } else if (h === '#inspect') {
+        setFullScreenImage(null);
+        setShowLeadModal(false);
+        setLeadSuccess(false);
+      } else if (h === '#vault') {
+        setFullScreenImage(null);
+        setShowLeadModal(false);
+        setViewItem(null);
+      } else if (h === '' || h === '#') {
+        setFullScreenImage(null);
+        setShowLeadModal(false);
+        setViewItem(null);
+        setSelectedVendor(null);
+        setSearchQuery("");
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   useEffect(() => {
     fetchPublicRadar();
   }, []);
@@ -135,6 +169,8 @@ export default function MasterLandingPage() {
         setLeadSuccess(false);
         setGuestEmail("");
         setViewItem(null);
+        // Force the URL back to the vault view after a successful submission
+        window.history.replaceState(null, '', window.location.pathname + '#vault');
       }, 3000);
     }
   };
@@ -154,7 +190,12 @@ export default function MasterLandingPage() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30 px-6 py-4 flex items-center justify-between shadow-sm">
         <div 
           className="flex items-center gap-3 cursor-pointer" 
-          onClick={() => { setSelectedVendor(null); setSearchQuery(""); }}
+          onClick={() => { 
+            setSelectedVendor(null); 
+            setSearchQuery(""); 
+            setViewItem(null);
+            window.history.replaceState(null, '', window.location.pathname);
+          }}
         >
           <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm" />
           <h1 className="text-xl font-black tracking-tight text-gray-900">TimbreBox</h1>
@@ -187,7 +228,6 @@ export default function MasterLandingPage() {
       {/* --- MAIN CONTENT AREA --- */}
       <section className="max-w-4xl mx-auto px-4 sm:px-8 py-8">
         
-        {/* 🚨 DATABASE ERROR SAFETY NET */}
         {dbError && (
           <div className="mb-10 text-center">
             <div className="bg-red-50 text-red-600 border border-red-200 p-6 rounded-2xl inline-block shadow-sm max-w-lg w-full">
@@ -217,7 +257,7 @@ export default function MasterLandingPage() {
                 {vendors.map(v => (
                   <button 
                     key={v.id}
-                    onClick={() => setSelectedVendor(v)}
+                    onClick={() => { setSelectedVendor(v); window.location.hash = 'vault'; }}
                     className="flex items-center justify-between bg-white border border-gray-200 p-4 rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-400 transition-all text-left w-full group"
                   >
                     <div className="flex flex-col">
@@ -238,7 +278,7 @@ export default function MasterLandingPage() {
           /* --- VIEW 2: COLLECTOR'S SPECIFIC INVENTORY GRID --- */
           <div className="animate-fade-in">
             <button 
-              onClick={() => { setSelectedVendor(null); setSearchQuery(""); }}
+              onClick={() => window.history.back()}
               className="text-sm font-bold text-gray-500 hover:text-emerald-600 mb-6 flex items-center gap-2 transition"
             >
               ← Back to Local Vaults
@@ -272,7 +312,7 @@ export default function MasterLandingPage() {
                 {vendorRecords.map((record) => (
                   <div 
                     key={record.id} 
-                    onClick={() => setViewItem(record)}
+                    onClick={() => { setViewItem(record); window.location.hash = 'inspect'; }}
                     className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm hover:shadow-xl hover:border-emerald-400 transition-all duration-300 cursor-pointer group flex flex-col h-full"
                   >
                     <div className="aspect-square w-full mb-4 overflow-hidden rounded-2xl bg-gray-100 relative">
@@ -317,7 +357,7 @@ export default function MasterLandingPage() {
               <span className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Item Inspection
               </span>
-              <button onClick={() => setViewItem(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">✕</button>
+              <button onClick={() => window.history.back()} className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">✕</button>
             </div>
 
             <div className="p-6 overflow-y-auto">
@@ -354,7 +394,7 @@ export default function MasterLandingPage() {
                       <p className="text-4xl font-black text-emerald-600">${(viewItem.price_cents / 100).toFixed(2)}</p>
                     </div>
                     <button 
-                      onClick={() => setShowLeadModal(true)}
+                      onClick={() => { setShowLeadModal(true); window.location.hash = 'lead'; }}
                       className="bg-gray-900 hover:bg-gray-800 text-white font-black text-lg px-8 py-4 rounded-xl shadow-xl transition transform active:scale-95"
                     >
                       Interested
@@ -380,7 +420,7 @@ export default function MasterLandingPage() {
                       {galleryImages.map(img => (
                         <div 
                           key={img.id} 
-                          onClick={() => setFullScreenImage(img.image_url)}
+                          onClick={() => { setFullScreenImage(img.image_url); window.location.hash = 'zoom'; }}
                           className="relative w-40 h-40 flex-shrink-0 rounded-xl overflow-hidden border-2 border-gray-700 hover:border-emerald-500 transition-colors cursor-zoom-in group shadow-lg"
                         >
                           <img 
@@ -426,7 +466,7 @@ export default function MasterLandingPage() {
       {fullScreenImage && (
         <div 
           className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-8 cursor-zoom-out animate-fade-in"
-          onClick={() => setFullScreenImage(null)}
+          onClick={() => window.history.back()}
         >
           <img 
             src={fullScreenImage} 
@@ -445,7 +485,7 @@ export default function MasterLandingPage() {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative animate-fade-in">
             
             <button 
-              onClick={() => { setShowLeadModal(false); setLeadSuccess(false); }} 
+              onClick={() => { window.history.back(); setLeadSuccess(false); }} 
               className="absolute top-4 right-4 z-10 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition"
             >
               ✕
