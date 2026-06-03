@@ -178,7 +178,7 @@ export default function MasterLandingPage() {
               <span className="text-emerald-400">true analog sound.</span>
             </h2>
             <p className="text-lg text-gray-400 font-medium leading-relaxed mb-0">
-              Welcome to TimbreBox. Explore active local vaults below to find verified records from collector record vault near you. Inspect the high-res photos to verify the record, then ping the vendor directly to secure it. 
+              Welcome to TimbreBox Vinyl Records. Browse the live public <strong>Radar</strong> below to discover albums actively broadcasting from local collectors' private <strong>Vaults</strong>. See a record you need? Inspect the high-res photos to visually verify the condition, then ping the vendor directly to secure your copy.
             </p>
           </div>
         </section>
