@@ -34,6 +34,7 @@ export default function MasterLandingPage() {
   const [vendors, setVendors] = useState<LocalVendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dbError, setDbError] = useState(""); // 🚨 New safety net for database connection issues
 
   // Modal States
   const [viewItem, setViewItem] = useState<PublicRecord | null>(null);
@@ -69,6 +70,7 @@ export default function MasterLandingPage() {
 
   async function fetchPublicRadar() {
     setLoading(true);
+    setDbError("");
     
     // Fetch records > $0.00 and join the vendor's store name
     const { data, error } = await supabase
@@ -77,7 +79,10 @@ export default function MasterLandingPage() {
       .gt("price_cents", 0)
       .order("id", { ascending: false });
 
-    if (!error && data) {
+    if (error) {
+      console.error("🚨 Supabase Error:", error);
+      setDbError(error.message || "Failed to fetch from database.");
+    } else if (data) {
       setRecords(data);
 
       // Group records by vendor to build the "Active Local Vaults" list
@@ -183,7 +188,7 @@ export default function MasterLandingPage() {
       </section>
 
       {/* --- ACTIVE LOCAL VENDORS --- */}
-      {!loading && vendors.length > 0 && (
+      {!loading && !dbError && vendors.length > 0 && (
         <section className="bg-white border-b border-gray-200 py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-8">
             <h3 className="text-lg font-black text-gray-900 mb-4 flex items-center gap-2">
@@ -217,9 +222,19 @@ export default function MasterLandingPage() {
           <p className="text-sm font-bold text-gray-500 mt-2 sm:mt-0">Showing {filteredRecords.length} live records</p>
         </div>
 
+        {/* 🚨 DATABASE ERROR SAFETY NET */}
+        {dbError && (
+          <div className="py-10 text-center">
+            <div className="bg-red-50 text-red-600 border border-red-200 p-6 rounded-2xl inline-block shadow-sm max-w-lg">
+              <h4 className="font-black text-lg mb-1">Database Connection Blocked</h4>
+              <p className="font-medium text-sm">{dbError}</p>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="py-20 text-center text-gray-400 font-bold animate-pulse text-lg">Loading visual archives...</div>
-        ) : filteredRecords.length === 0 ? (
+        ) : !dbError && filteredRecords.length === 0 ? (
           <div className="py-20 text-center">
             <div className="text-5xl mb-4 opacity-20">📭</div>
             <p className="text-gray-500 font-bold text-lg">No records match your search.</p>
@@ -321,7 +336,7 @@ export default function MasterLandingPage() {
                 </div>
               </div>
 
-              {/* --- RESTORED: THE DARK THEME HI-RES GALLERY --- */}
+              {/* --- THE DARK THEME HI-RES GALLERY --- */}
               {galleryImages.length > 0 && (
                 <div className="border-t border-gray-100 pt-6 mb-6">
                   <div className="bg-gray-900 rounded-2xl p-5 shadow-inner border border-gray-800 relative overflow-hidden">
