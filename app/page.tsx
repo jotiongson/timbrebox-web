@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "./supabase"; // Adjust path if your supabase client is elsewhere
+import { supabase } from "./supabase"; 
 import Link from "next/link";
 
 interface PublicRecord {
@@ -17,15 +17,27 @@ interface PublicRecord {
   cover_image?: string;
   tracklist?: any[];
   location?: string;
+  vendor_profiles?: {
+    store_name: string;
+  };
+}
+
+interface LocalVendor {
+  id: string;
+  name: string;
+  recordCount: number;
+  distance: number;
 }
 
 export default function MasterLandingPage() {
   const [records, setRecords] = useState<PublicRecord[]>([]);
+  const [vendors, setVendors] = useState<LocalVendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Modal States
   const [viewItem, setViewItem] = useState<PublicRecord | null>(null);
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
   const [showLeadModal, setShowLeadModal] = useState(false);
   
   // Lead Form States
@@ -37,17 +49,58 @@ export default function MasterLandingPage() {
     fetchPublicRadar();
   }, []);
 
+  // Fetch High-Res Gallery Images when a record is inspected
+  useEffect(() => {
+    if (viewItem) {
+      async function fetchGallery() {
+        const { data } = await supabase
+          .from('record_images')
+          .select('*')
+          .eq('record_id', viewItem?.id)
+          .order('created_at', { ascending: true });
+        
+        setGalleryImages(data || []);
+      }
+      fetchGallery();
+    } else {
+      setGalleryImages([]);
+    }
+  }, [viewItem]);
+
   async function fetchPublicRadar() {
     setLoading(true);
-    // Only fetch records where the price is strictly greater than 0
+    
+    // Fetch records > $0.00 and join the vendor's store name
     const { data, error } = await supabase
       .from("inventory")
-      .select("*")
+      .select("*, vendor_profiles(store_name)")
       .gt("price_cents", 0)
       .order("id", { ascending: false });
 
     if (!error && data) {
       setRecords(data);
+
+      // Group records by vendor to build the "Active Local Vaults" list
+      const vendorMap = new Map<string, LocalVendor>();
+      
+      data.forEach((record: any) => {
+        if (!vendorMap.has(record.vendor_id)) {
+          // Generate a pseudo-random distance strictly for UI demonstration around the Eastvale area
+          const mockDistance = Math.floor(Math.random() * 12) + 1; 
+          
+          vendorMap.set(record.vendor_id, {
+            id: record.vendor_id,
+            name: record.vendor_profiles?.store_name || "Independent Collector",
+            recordCount: 1,
+            distance: mockDistance
+          });
+        } else {
+          const v = vendorMap.get(record.vendor_id)!;
+          v.recordCount += 1;
+        }
+      });
+
+      setVendors(Array.from(vendorMap.values()).sort((a, b) => b.recordCount - a.recordCount));
     }
     setLoading(false);
   }
@@ -99,7 +152,7 @@ export default function MasterLandingPage() {
           <Link href="/login" className="text-sm font-bold text-gray-600 hover:text-emerald-600 transition hidden sm:block">
             Member Login
           </Link>
-          <Link href="/register" className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-5 py-2 rounded-xl hover:bg-emerald-100 transition shadow-sm">
+          <Link href="/login" className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-5 py-2 rounded-xl hover:bg-emerald-100 transition shadow-sm">
             Open Your Vault
           </Link>
         </div>
@@ -128,6 +181,32 @@ export default function MasterLandingPage() {
           </div>
         </div>
       </section>
+
+      {/* --- ACTIVE LOCAL VENDORS --- */}
+      {!loading && vendors.length > 0 && (
+        <section className="bg-white border-b border-gray-200 py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-8">
+            <h3 className="text-lg font-black text-gray-900 mb-4 flex items-center gap-2">
+              <span>📡</span> Active Local Vaults
+            </h3>
+            <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+              {vendors.map(v => (
+                <div key={v.id} className="bg-gray-50 border border-gray-200 p-4 rounded-2xl min-w-[240px] shadow-sm flex flex-col flex-shrink-0">
+                  <div className="flex justify-between items-start mb-3">
+                    <h4 className="font-bold text-gray-900 truncate pr-2">{v.name}</h4>
+                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg uppercase tracking-wider">
+                      {v.recordCount} Records
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 font-bold flex items-center gap-1 mt-auto">
+                    📍 ~{v.distance} miles from Eastvale
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* --- COLLECTIONS CORNER - VISUAL VERIFICATION --- */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
@@ -169,7 +248,10 @@ export default function MasterLandingPage() {
                 
                 <div className="flex-1 flex flex-col">
                   <h4 className="font-black text-gray-900 leading-tight mb-1 line-clamp-2">{record.title}</h4>
-                  <p className="text-sm text-gray-500 font-medium mb-3 truncate">{record.artist}</p>
+                  <p className="text-sm text-gray-500 font-medium mb-1 truncate">{record.artist}</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 truncate">
+                    By: {record.vendor_profiles?.store_name || "Collector"}
+                  </p>
                   
                   <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100">
                     <span className="font-black text-lg text-emerald-600">${(record.price_cents / 100).toFixed(2)}</span>
@@ -184,20 +266,20 @@ export default function MasterLandingPage() {
         )}
       </section>
 
-      {/* --- INSPECT MODAL (VISUAL VERIFICATION) --- */}
+      {/* --- INSPECT MODAL --- */}
       {viewItem && !showLeadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden relative animate-fade-in flex flex-col max-h-[90vh]">
             
-            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center z-10">
               <span className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Visual Verification 
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Item Inspection
               </span>
               <button onClick={() => setViewItem(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center font-bold transition">✕</button>
             </div>
 
             <div className="p-6 overflow-y-auto">
-              <div className="flex flex-col sm:flex-row gap-8 mb-8">
+              <div className="flex flex-col sm:flex-row gap-8 mb-6">
                 <div className="w-full sm:w-2/5 aspect-square bg-gray-100 rounded-2xl overflow-hidden flex-shrink-0 border border-gray-200 shadow-inner">
                   {viewItem.cover_image ? (
                     <img src={viewItem.cover_image} alt="cover" className="w-full h-full object-cover" />
@@ -207,7 +289,7 @@ export default function MasterLandingPage() {
                 </div>
                 <div className="flex-1 flex flex-col justify-center">
                   <h2 className="text-3xl font-black text-gray-900 tracking-tight leading-tight mb-2">{viewItem.title}</h2>
-                  <p className="text-xl text-gray-500 font-medium mb-6">{viewItem.artist}</p>
+                  <p className="text-xl text-gray-500 font-medium mb-4">{viewItem.artist}</p>
                   
                   <div className="grid grid-cols-3 gap-3 mb-6">
                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
@@ -239,6 +321,37 @@ export default function MasterLandingPage() {
                 </div>
               </div>
 
+              {/* --- RESTORED: THE DARK THEME HI-RES GALLERY --- */}
+              {galleryImages.length > 0 && (
+                <div className="border-t border-gray-100 pt-6 mb-6">
+                  <div className="bg-gray-900 rounded-2xl p-5 shadow-inner border border-gray-800 relative overflow-hidden">
+                    {/* Decorative accent */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-bl-full pointer-events-none"></div>
+                    
+                    <h4 className="text-emerald-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <span className="text-lg">🔍</span> Visual Inspection Gallery
+                    </h4>
+                    <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar relative z-10">
+                      {galleryImages.map(img => (
+                        <div key={img.id} className="relative w-40 h-40 flex-shrink-0 rounded-xl overflow-hidden border-2 border-gray-700 hover:border-emerald-500 transition-colors cursor-crosshair group shadow-lg">
+                          <img 
+                            src={img.image_url} 
+                            alt={img.caption} 
+                            className="w-full h-full object-cover group-hover:scale-125 transition-transform duration-700" 
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/80 px-2 py-1.5 backdrop-blur-sm border-t border-gray-700">
+                            <p className="text-[10px] text-white font-bold uppercase tracking-wider truncate text-center">
+                              {img.caption}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- TRACKLIST --- */}
               {viewItem.tracklist && viewItem.tracklist.length > 0 && (
                 <div className="border-t border-gray-100 pt-6">
                   <h4 className="font-black text-gray-900 mb-4 text-lg">Tracklist Verification</h4>
@@ -274,7 +387,7 @@ export default function MasterLandingPage() {
 
             {leadSuccess ? (
               <div className="p-10 text-center flex flex-col items-center justify-center h-full">
-                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-4xl mb-6 shadow-inner">
+                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-4xl mb-6 shadow-inner mx-auto">
                   ✓
                 </div>
                 <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Request Sent!</h3>
