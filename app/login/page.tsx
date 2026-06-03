@@ -52,8 +52,8 @@ export default function LoginPage() {
         <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition">
           <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm" />
           <div>
-            <h1 className="text-xl font-black tracking-tight text-gray-900 flex items-center gap-2">
-              TimbreBox <span className="text-gray-400 font-bold text-sm bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">Login</span>
+            <h1 className="text-xl font-black tracking-tight text-gray-900 flex items-center">
+              TimbreBox <span className="text-gray-300 font-light mx-2 text-lg">/</span> <span className="text-gray-500 font-bold text-sm tracking-wide uppercase mt-0.5">Login</span>
             </h1>
           </div>
         </Link>
