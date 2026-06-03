@@ -130,19 +130,42 @@ export default function VendorDashboard() {
 
   // --- AUTH & FETCH EFFECT ---
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let isMounted = true;
+
+    // 🚨 FAIL-SAFE: If Supabase hangs for more than 3 seconds, force the screen to unlock
+    const failsafeTimeout = setTimeout(() => {
+      if (isMounted) setIsAuthLoading(false);
+    }, 3000);
+
+    // 1. Initial Session Check
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!isMounted) return;
+      
+      clearTimeout(failsafeTimeout); // It worked quickly, cancel the fail-safe
+      
+      if (error) console.error("Session fetch error:", error);
+      
       setSession(session);
-      setIsAuthLoading(false);
+      setIsAuthLoading(false); // Unlock the UI
+      
       if (session) {
         fetchInventory(session.user.id);
         fetchStoreProfile(session.user.id);
         fetchLeads(session.user.id);
         refreshTelemetry();
       }
+    }).catch(err => {
+      console.error("Auth initialization failed:", err);
+      if (isMounted) setIsAuthLoading(false); // Unlock even on failure
     });
 
+    // 2. Auth State Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      
       setSession(session);
+      setIsAuthLoading(false); // Guarantee UI unlocks on any auth event
+      
       if (session) {
         fetchInventory(session.user.id);
         fetchStoreProfile(session.user.id);
@@ -156,9 +179,13 @@ export default function VendorDashboard() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(failsafeTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
-
+  
   async function fetchLeads(vendorId: string) {
     const { data, error } = await supabase
       .from("buyer_leads")
