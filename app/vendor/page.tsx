@@ -785,13 +785,11 @@ export default function VendorDashboard() {
             👤
           </button>
           
+          {/* PROFILE DROPDOWN: Fixed to remove Admin Panel link */}
           {isProfileMenuOpen && (
             <>
               <div className="fixed inset-0" onClick={() => setIsProfileMenuOpen(false)}></div>
               <div className="absolute right-0 mt-12 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-fade-in">
-                {isAdmin && (
-                  <a href="/admin" className="px-5 py-3.5 text-sm font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border-b border-gray-50 transition flex items-center gap-2">🛡️ Admin Panel</a>
-                )}
                 <a href="/vendor/settings" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">⚙️ Settings</a>
                 <a href="/" className="px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition flex items-center gap-2">📡 View Radar</a>
                 <button onClick={() => supabase.auth.signOut()} className="px-5 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 text-left transition flex items-center gap-2">🚪 Sign Out</button>
@@ -879,9 +877,9 @@ export default function VendorDashboard() {
         </div>
       )}
 
-      {/* --- TELEMETRY CACHE EFFICIENCY STRIP (ADMIN ONLY) --- */}
+      {/* --- TELEMETRY CACHE EFFICIENCY STRIP (ADMIN ONLY) --- Fixed mt-6 to push down on mobile */}
       {isAdmin && (
-        <section className="mb-6 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm animate-fade-in">
+        <section className="mt-6 mb-6 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm animate-fade-in">
           <div 
             className="flex justify-between items-center cursor-pointer select-none" 
             onClick={() => { if(!showMetrics) refreshTelemetry(); setShowMetrics(!showMetrics); }}
