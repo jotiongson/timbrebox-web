@@ -51,7 +51,11 @@ export default function LoginPage() {
       <header className="px-6 py-6 flex items-center justify-between w-full max-w-6xl mx-auto">
         <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition">
           <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm" />
-          <h1 className="text-xl font-black tracking-tight text-gray-900">TimbreBox</h1>
+          <div>
+            <h1 className="text-xl font-black tracking-tight text-gray-900 flex items-center gap-2">
+              TimbreBox <span className="text-gray-400 font-bold text-sm bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">Login</span>
+            </h1>
+          </div>
         </Link>
         <Link href="/" className="text-sm font-bold text-gray-500 hover:text-emerald-600 transition flex items-center gap-2">
           ← Back to Radar
@@ -64,7 +68,6 @@ export default function LoginPage() {
           
           {/* LEFT SIDE: MESSAGING & VALUE PROPOSITION */}
           <div className="w-full md:w-5/12 bg-gray-900 p-10 sm:p-14 text-white flex flex-col justify-center relative overflow-hidden">
-            {/* Decorative element */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-bl-full pointer-events-none"></div>
             
             <div className="relative z-10">
