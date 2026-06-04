@@ -174,6 +174,7 @@ export default function LoginPage() {
                     : "Don't have an account? Register Here"}
                 </button>
               </div>
+              
             </div>
           </div>
         </div>
