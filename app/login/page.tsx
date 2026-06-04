@@ -167,7 +167,7 @@ export default function LoginPage() {
                     setError("");
                     setMessage("");
                   }}
-                  className="text-sm font-bold text-gray-500 hover:text-emerald-700 transition"
+                  className="text-sm font-bold text-emerald-600 hover:text-emerald-500 transition"
                 >
                   {isSignUp
                     ? "Already have an account? Sign In"
