@@ -53,7 +53,9 @@ export default function LoginPage() {
           <img src="/icons/icon-512x512.png" alt="TimbreBox Logo" className="w-8 h-8 object-contain rounded-md shadow-sm" />
           <div>
             <h1 className="text-xl font-black tracking-tight text-gray-900 flex items-center">
-              TimbreBox <span className="text-gray-300 font-light mx-2 text-lg">/</span> <span className="text-gray-500 font-bold text-sm tracking-wide uppercase mt-0.5">Login</span>
+              TimbreBox 
+              <span className="text-gray-300 font-light mx-2 text-lg">/</span> 
+              <span className="text-gray-500 font-bold text-sm tracking-wide uppercase mt-0.5">Login</span>
             </h1>
           </div>
         </Link>
@@ -64,43 +66,45 @@ export default function LoginPage() {
 
       {/* --- SPLIT SCREEN LAYOUT --- */}
       <div className="flex-1 flex items-center justify-center p-6">
-        <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden flex flex-col md:flex-row">
+        <div className={`bg-white w-full ${isSignUp ? 'max-w-5xl' : 'max-w-lg'} rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden flex flex-col md:flex-row transition-all duration-300`}>
           
-          {/* LEFT SIDE: MESSAGING & VALUE PROPOSITION */}
-          <div className="w-full md:w-5/12 bg-gray-900 p-10 sm:p-14 text-white flex flex-col justify-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-bl-full pointer-events-none"></div>
-            
-            <div className="relative z-10">
-              <span className="text-emerald-400 font-black uppercase tracking-widest text-xs mb-4 block">
-                Collector Membership
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-black tracking-tight mb-6 leading-tight">
-                Archive, organize, and connect.
-              </h2>
-              <p className="text-gray-400 font-medium text-sm sm:text-base leading-relaxed mb-8">
-                As a member, you unlock powerful tools to catalog your inventory and easily search your personal vinyl collection. 
-                Keep your vault entirely private for your own peace of mind, or easily broadcast records to the local community simply by setting an asking price and snapping high-res photos for buyers.
-              </p>
+          {/* LEFT SIDE: MESSAGING & VALUE PROPOSITION (ONLY SHOWS ON SIGNUP) */}
+          {isSignUp && (
+            <div className="w-full md:w-5/12 bg-gray-900 p-10 sm:p-14 text-white flex flex-col justify-center relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-bl-full pointer-events-none"></div>
+              
+              <div className="relative z-10">
+                <span className="text-emerald-400 font-black uppercase tracking-widest text-xs mb-4 block">
+                  Collector Membership
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black tracking-tight mb-6 leading-tight">
+                  Archive, organize, and connect.
+                </h2>
+                <p className="text-gray-400 font-medium text-sm sm:text-base leading-relaxed mb-8">
+                  As a member, you unlock powerful tools to catalog your inventory and easily search your personal vinyl collection. 
+                  Keep your vault entirely private for your own peace of mind, or easily broadcast records to the local community simply by setting an asking price and snapping high-res photos for buyers.
+                </p>
 
-              <ul className="space-y-4">
-                <li className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 text-sm">✓</div>
-                  <p className="text-sm font-bold text-gray-300">Smart Barcode & Catalog OCR Scanner</p>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 text-sm">✓</div>
-                  <p className="text-sm font-bold text-gray-300">Private Vault Organization</p>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 text-sm">✓</div>
-                  <p className="text-sm font-bold text-gray-300">Zero-Friction Public Broadcasting</p>
-                </li>
-              </ul>
+                <ul className="space-y-4">
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 text-sm">✓</div>
+                    <p className="text-sm font-bold text-gray-300">Smart Barcode & Catalog OCR Scanner</p>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 text-sm">✓</div>
+                    <p className="text-sm font-bold text-gray-300">Private Vault Organization</p>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 text-sm">✓</div>
+                    <p className="text-sm font-bold text-gray-300">Zero-Friction Public Broadcasting</p>
+                  </li>
+                </ul>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* RIGHT SIDE: AUTH FORM */}
-          <div className="w-full md:w-7/12 p-10 sm:p-16 flex flex-col justify-center bg-white">
+          <div className={`w-full ${isSignUp ? 'md:w-7/12' : ''} p-10 sm:p-16 flex flex-col justify-center bg-white`}>
             <div className="max-w-md w-full mx-auto">
               <h3 className="text-2xl font-black text-gray-900 mb-2">
                 {isSignUp ? "Create your free account" : "Welcome back"}
