@@ -102,6 +102,7 @@ export default function VendorDashboard() {
   // --- GALLERY STATES ---
   const [galleryImages, setGalleryImages] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [uploadCaption, setUploadCaption] = useState("Dead Wax / Matrix");
 
   // --- UI STATES ---
@@ -293,6 +294,31 @@ export default function VendorDashboard() {
     }
     
     setIsUploading(false);
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setIsCoverUploading(true);
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `cover_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `${session?.user?.id}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('record_gallery')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      alert('Cover upload failed: ' + uploadError.message);
+    } else {
+      const { data: { publicUrl } } = supabase.storage
+        .from('record_gallery')
+        .getPublicUrl(filePath);
+      
+      setEditFormData(prev => ({ ...prev, cover_image: publicUrl }));
+    }
+    setIsCoverUploading(false);
   };
 
   const handleDeleteImage = async (imageId: string) => {
@@ -882,7 +908,12 @@ export default function VendorDashboard() {
       {/* --- MASTER SCAN/ADD BUTTON --- */}
       <section className="mb-6">
         <button 
-          onClick={() => setIsScannerModalOpen(true)}
+          onClick={() => {
+            if (selectedCategory) {
+              setFormData(prev => ({ ...prev, location: selectedCategory }));
+            }
+            setIsScannerModalOpen(true);
+          }}
           className="w-full bg-gray-900 hover:bg-emerald-600 text-white rounded-2xl py-4 shadow-[0_4px_20px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_20px_rgba(16,185,129,0.3)] transition-all duration-300 flex justify-center items-center gap-3 transform active:scale-[0.98]"
         >
           <span className="text-xl">➕</span>
@@ -1310,6 +1341,26 @@ export default function VendorDashboard() {
             
             <div className="p-6 overflow-y-auto">
               <form id="recordForm" onSubmit={handleModalSubmit} className="flex flex-col gap-4">
+                {/* --- MAIN COVER PHOTO UPLOADER --- */}
+                <div className="mb-2 flex items-center gap-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="w-16 h-16 bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center relative group">
+                    {editFormData.cover_image ? (
+                      <>
+                        <img src={editFormData.cover_image} alt="Cover Preview" className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => setEditFormData({...editFormData, cover_image: ""})} className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold">✕</button>
+                      </>
+                    ) : (
+                      <span className="text-2xl opacity-30">💿</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Main Thumbnail</label>
+                    <label className={`inline-block text-xs font-bold py-2 px-4 rounded-xl cursor-pointer transition border shadow-sm ${isCoverUploading ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'}`}>
+                      <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={isCoverUploading} />
+                      {isCoverUploading ? '⏳ Uploading...' : '📷 Take Photo or Library'}
+                    </label>
+                  </div>
+                </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Title <span className="text-red-500">*</span></label>
                   <div className="relative w-full">
