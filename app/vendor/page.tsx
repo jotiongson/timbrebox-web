@@ -101,6 +101,7 @@ export default function VendorDashboard() {
 
   // --- GALLERY STATES ---
   const [galleryImages, setGalleryImages] = useState<any[]>([]);
+  const [lightboxData, setLightboxData] = useState<{url: string, caption: string} | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [uploadCaption, setUploadCaption] = useState("Dead Wax / Matrix");
@@ -457,6 +458,13 @@ export default function VendorDashboard() {
       identifiers: album.identifiers || []
     });
     setIsModalOpen(true);
+  }
+
+  // --- NEW DETAILS MODAL LAUNCHER ---
+  function openDetailsModal(album: InventoryItem) {
+    setViewItem(album);
+    setGalleryImages([]); 
+    fetchGalleryImages(album.id); 
   }
 
   function openManualAddModal() {
@@ -999,7 +1007,8 @@ export default function VendorDashboard() {
                   className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
                 />
                 
-                <div onClick={() => setViewItem(album)} className="flex-1 flex gap-3 sm:gap-4 items-center cursor-pointer min-w-0">
+                {/* MODIFIED: Now calls openDetailsModal */}
+                <div onClick={() => openDetailsModal(album)} className="flex-1 flex gap-3 sm:gap-4 items-center cursor-pointer min-w-0">
                   {album.cover_image ? (
                     <img src={album.cover_image} alt="cover" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl shadow-sm flex-shrink-0" />
                   ) : (
@@ -1324,6 +1333,30 @@ export default function VendorDashboard() {
                   </div>
                 </div>
               )}
+
+              {/* --- VERIFIED HI-RES DETAILS (BROKER VIEW) --- */}
+              {galleryImages.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-gray-900 mb-3 border-b border-gray-100 pb-1 flex items-center gap-2">
+                    📸 Verified High-Res Details
+                  </h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {galleryImages.map(img => (
+                      <div 
+                        key={img.id} 
+                        onClick={() => setLightboxData({url: img.image_url, caption: img.caption})}
+                        className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm hover:shadow-md transition transform active:scale-95 group"
+                      >
+                        <img src={img.image_url} alt={img.caption} className="w-full h-full object-cover" />
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/75 px-1 py-1.5 backdrop-blur-sm">
+                          <p className="text-[9px] text-white font-bold uppercase tracking-wider text-center truncate">{img.caption}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         </div>
@@ -1499,6 +1532,32 @@ export default function VendorDashboard() {
       {showCatalogScanner && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-80 p-4 animate-fade-in">
           <CatalogScanner onClose={() => setShowCatalogScanner(false)} onDetected={async (text: string) => { setCatalog(text); setShowCatalogScanner(false); await handleCatalogLookup(text); }} />
+        </div>
+      )}
+
+      {/* --- FULL SCREEN HI-RES LIGHTBOX --- */}
+      {lightboxData && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md animate-fade-in">
+          {/* Close Button */}
+          <button 
+            onClick={() => setLightboxData(null)} 
+            className="absolute top-6 right-6 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold transition shadow-lg z-[110]"
+          >
+            ✕
+          </button>
+          
+          {/* Image Tag / Label */}
+          <div className="absolute top-6 left-6 bg-black/60 text-white px-4 py-2 rounded-lg border border-white/10 shadow-lg z-[110]">
+            <p className="text-xs font-black uppercase tracking-widest">{lightboxData.caption}</p>
+          </div>
+          
+          {/* The Image (Native Pinch-to-Zoom enabled via inline touchAction) */}
+          <img 
+            src={lightboxData.url} 
+            alt={lightboxData.caption} 
+            className="max-w-full max-h-[85vh] object-contain"
+            style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+          />
         </div>
       )}
 
